@@ -17,7 +17,7 @@ bal = [406, 880, 117]           # starting balance
 # roth money is assumed to be all deposited at start of plan
 # XXX need ability to separate contributions from earnings and
 #     when the contributions are spendable
-socialsec = 5
+socialsec = 50
 extra = 1.5                     # extra spending per month at beginning
 extra_months = 8.5 * 12         # models current mortgage
 
@@ -25,19 +25,21 @@ extra_months = 8.5 * 12         # models current mortgage
 #startage = 35
 #bal = [100, 650, 0]
 #extra = 0
-#returns = 1.09
 
 numyr = endage - startage
 vper = 4        # variables per year (savings, ira, roth, ira2roth)
 
 # optimize this poly (we want to maximize the money we can spend)
 c = [-1] + [0] * vper * numyr
+for year in range(numyr):
+    c[1+vper*year+2] = -1e-7     # and slightly favor Roth
 
 A = []
 b = []
 
 # 2017 table (could predict it moves with inflation?)
-taxrates = [[0,     0.10, 0],
+taxrates = [[0,     0.00, 0],
+            [12.7,  0.10, 1.27],        # fake level to fix 0
             [18.7,  0.15, 1.9],
             [75.9,  0.25, 10.5],
             [153.1, 0.28, 29.8],
@@ -55,33 +57,41 @@ stded = 12.7                    # standard deduction
 #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
 for year in range(numyr):
     for (cut, rate, base) in taxrates:
-        row = [1] + [0] * vper * numyr
-        row[1+vper*year+0] = -1            # savings
+        row = [1] + [0] * vper * numyr          # goal is positive
+        row[1+vper*year+0] = -1                 # savings
         if year + startage < 59:
-            row[1+vper*year+1] = -0.9 + rate     # 10% penelty
+            row[1+vper*year+1] = -0.9 + rate    # 10% penelty
         else:
-            row[1+vper*year+1] = -1 + rate       # IRA - tax
-        row[1+vper*year+2] = -1            # Roth
-        row[1+vper*year+3] = rate          # tax on Roth conversion
+            row[1+vper*year+1] = -1 + rate      # IRA - tax
+
+        # XXX How to model 10% penelty for Roth before 59 other than
+        # contributions
+        row[1+vper*year+2] = -1                 # Roth
+
+        row[1+vper*year+3] = rate               # tax on Roth conversion
         A += [row]
+
+        # extra money needed at start of plan
         if extra_months - year*12 > 12:
             base += extra*12
         elif extra_months - year*12 > 0:
             base += extra*(extra_months - year*12)
+
+        # social security (which is taxed)
         if startage + year >= 70:
             base -= socialsec - socialsec * rate
 
         # offset from having this taxrate from zero
         b += [(cut + stded) * rate - base]
 
-# final balance for savings
+# final balance for savings needs to be positive
 row = [0] + [0] * vper * numyr
 for year in range(numyr):
     row[1+vper*year+0] = returns ** (numyr - year)
 A += [row]
 b += [bal[0] * returns ** numyr]
 
-# final balance for IRA
+# final balance for IRA needs to be positive
 row = [0] + [0] * vper * numyr
 for year in range(numyr):
     row[1+vper*year+1] = returns ** (numyr - year)
@@ -89,8 +99,22 @@ for year in range(numyr):
 A += [row]
 b += [bal[1] * returns ** numyr]
 
-# at each year balance of Roth should be positive
-for year in range(1,numyr):
+# before 59, Roth can only spend from contributions
+for year in range(min(numyr, 59-startage)):
+    row = [0] + [0] * vper * numyr
+    for y in range(0, year-4):
+        row[1+vper*y+3]=-1
+    for y in range(year+1):
+        row[1+vper*y+2]=1
+    A += [row]
+    if year < 5:
+        b += [0]        # sum of convertions <= 0
+    else:
+        b += [bal[2]]
+
+# after 59 all of Roth can be spent, but contributions need to age
+# 5 years and the balance each year needs to be positive
+for year in range(max(0,59-startage),numyr+1):
     row = [0] + [0] * vper * numyr
 
     # remove previous withdrawls
@@ -109,24 +133,15 @@ for year in range(1,numyr):
     else:
         b += [bal[2] * returns ** year]
 
-# before 59 roth withdraws only from conversions
-if startage < 59:
-    for year in range(59 - startage):
-        row = [0] + [0] * vper * numyr
-        for y in range(0, year-5):
-            row[1+vper*y+3]=-1
-        for y in range(year):
-            row[1+vper*y+2]=1
-        A += [row]
-        if year <= 5:
-            b += [0]        # sum of convertions <= 0
-        else:
-            b += [bal[2]]
-
 print("Num vars: ", len(c))
 print("Num contraints: ", len(b))
 import scipy.optimize
-res = scipy.optimize.linprog(c, A_ub=A, b_ub=b, options={"disp": True})
+res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
+                             options={"disp": True,
+                                      "bland": True,
+                                      "tol": 1.0e-6})
+
+print("Yearly spending > ", res.x[0])
 
 print((" age" + " %6s" * 10) %
       ("saving", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
@@ -134,6 +149,8 @@ print((" age" + " %6s" * 10) %
 savings = bal[0]
 ira = bal[1]
 roth = bal[2]
+ttax = 0
+tspend = 0
 for year in range(numyr):
     fsavings = res.x[1+year*vper]
     fira = res.x[1+year*vper+1]
@@ -145,7 +162,7 @@ for year in range(numyr):
     if income < 0:
         income = 0
     for (cut, rate, base) in taxrates:
-        if income <= cut:
+        if income < cut:
             break
         c = cut
         r = rate
@@ -154,7 +171,9 @@ for year in range(numyr):
     tax = (income - cut) * rate + base
     if startage + year < 59:
         tax += fira * 0.10
+    ttax += tax
     spending = fsavings + fira + froth - tax
+    tspend += spending
     if year + startage >= 70:
         spending += socialsec
     print((" %d:" + " %6.0f" * 10) %
@@ -171,3 +190,7 @@ for year in range(numyr):
     roth -= froth
     roth += ira2roth
     roth *= returns
+
+
+print("total tax: %.0f" % ttax)
+print("total spending: %.0f" % tspend)
