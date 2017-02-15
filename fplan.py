@@ -1,5 +1,9 @@
 #!/usr/bin/python3
 
+import toml
+import argparse
+import scipy.optimize
+
 # TODO
 #   - Model inflation
 #     - scales: spending, tax brackets, SS
@@ -13,19 +17,15 @@
 #vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
 #all vars positive
 
-S = { 'returns' : 1.06,
-      'startage' : 47,
-      'endage' : 100,
-      'aftertax' : { 'bal' : 406,
-                     'basis' : 300},
-      'IRA' : 880,
-      'roth' : { 'bal' : 117,
-                 'contrib' : [(47, 117)]},
-      'socialsec' : 50,
-      'extra' : 18,
-      'extra_yr': 8.5
-}
 
+# Instantiate the parser
+parser = argparse.ArgumentParser()
+
+parser.add_argument('conffile')
+args = parser.parse_args()
+
+with open(args.conffile) as conffile:
+    S = toml.loads(conffile.read())
 cg_tax = 0.15
 
 numyr = S['endage'] - S['startage']
@@ -108,7 +108,7 @@ for year in range(numyr):
     row[1+vper*year+1] = S['returns'] ** (numyr - year)
     row[1+vper*year+3] = S['returns'] ** (numyr - year)
 A += [row]
-b += [S['IRA'] * S['returns'] ** numyr]
+b += [S['IRA']['bal'] * S['returns'] ** numyr]
 
 # before 59, Roth can only spend from contributions
 for year in range(min(numyr, 59-S['startage'])):
@@ -146,7 +146,6 @@ for year in range(max(0,59-S['startage']),numyr+1):
 
 print("Num vars: ", len(c))
 print("Num contraints: ", len(b))
-import scipy.optimize
 res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                              options={"disp": True,
                                       "bland": True,
@@ -158,7 +157,7 @@ print((" age" + " %6s" * 10) %
       ("saving", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
        "rate", "tax", "spend"))
 savings = S['aftertax']['bal']
-ira = S['IRA']
+ira = S['IRA']['bal']
 roth = S['roth']['bal']
 ttax = 0
 tspend = 0
