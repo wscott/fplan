@@ -3,6 +3,9 @@
 # TODO
 #   - Model inflation
 #     - scales: spending, tax brackets, SS
+#   - RMD
+#   - capital gains
+
 
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
@@ -31,22 +34,21 @@ vper = 4        # variables per year (savings, ira, roth, ira2roth)
 
 # optimize this poly (we want to maximize the money we can spend)
 c = [-1] + [0] * vper * numyr
-for year in range(numyr):
-    c[1+vper*year+2] = -1e-7     # and slightly favor Roth
 
 A = []
 b = []
 
 # 2017 table (could predict it moves with inflation?)
+# only married joint at the moment
 taxrates = [[0,     0.00, 0],
-            [12.7,  0.10, 1.27],        # fake level to fix 0
+            [0.1,  0.10, 0.01],        # fake level to fix 0
             [18.7,  0.15, 1.9],
             [75.9,  0.25, 10.5],
             [153.1, 0.28, 29.8],
             [233.4, 0.33, 52.2],
             [415.7, 0.35, 112.4],
             [470.0, 0.40, 131.4]]
-stded = 12.7                    # standard deduction
+stded = 12.7 + 2*4.05                 # standard deduction
 
 # spending each year needs to be more than goal after subtracting taxes
 # we do the taxes for each tax bracket as a separate constraint. Only the
@@ -139,10 +141,10 @@ import scipy.optimize
 res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                              options={"disp": True,
                                       "bland": True,
-                                      "tol": 1.0e-6})
+                                      "tol": 1.0e-9})
 
-print("Yearly spending > ", res.x[0])
-
+print("Yearly spending <= ", 100*int(10*res.x[0]))
+print()
 print((" age" + " %6s" * 10) %
       ("saving", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
        "rate", "tax", "spend"))
