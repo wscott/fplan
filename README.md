@@ -17,13 +17,14 @@ some new ideas.
 * Simplistic capital gains assuming an average cost basis at a fixed 15%
 * Roth withdraw limitations before age 59
 * Early IRA withdrawals have a 10% penalty. (this is added to 'tax')
+* inflation
 
 ## Not modeled yet
 
-* inflation
 * Required Minimum Distributions from IRA
 * Existing Roth contribution dates for before 59 withdraws
 * early withdrawals from Roth gains are not modeled
+* Recording when existing Roth contributions can be accessed in config file
 
 ## Not modeled
 

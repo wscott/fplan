@@ -3,17 +3,19 @@
 # The format of this file will likely change in the future as
 # the program changes in the future.
 
-returns = 1.06		# return rate of investments (6% default)
+returns = 8		# return rate of investments
+inflation = 2.1		# yearly inflation rate
 
 # age range to simulate
 startage = 55
 endage = 100		# stops at 99
 
 # assume Social Security will start paying $35k/yr at age 70
+# the SS payout is scaled by inflation
 socialsec = 35000
 
 # extra payments required (here mortgage at $750/mo for 12 years)
-extra = 9_000
+extra = 9000
 extra_yr = 12
 
 # after tax savings accounts
