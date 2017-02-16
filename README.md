@@ -16,18 +16,21 @@ some new ideas.
 * Federal income tax on IRA spending with 2017 tables
 * Simplistic capital gains assuming an average cost basis at a fixed 15%
 * Roth withdraw limitations before age 59
+* Early IRA withdrawals have a 10% penalty. (this is added to 'tax')
 
 ## Not modeled yet
 
 * inflation
 * Required Minimum Distributions from IRA
 * Existing Roth contribution dates for before 59 withdraws
+* early withdrawals from Roth gains are not modeled
 
 ## Not modeled
 
 * Any other taxes
-* Incoming
+* Income or a pre-retirement period
 * new contributions to IRA or Roth
+* IRA 72(t) withdrawals
 
 ## Assumptions
 
@@ -48,3 +51,19 @@ on most machines.
 * Copy `sample.toml` to a new file
 * Edit with your information
 * run `python3 ./fplan.py NEW.toml`
+
+## Output
+
+The output is a table by age with the following columns. All numbers
+in table are in 1000s of dollars.
+
+* savings: amount in after-tax savings account
+* send: send from savings this year
+* IRA: balance of tax-deferred IRA acount
+* fIRA: amount to pull from IRA this year. (before 59 with penalty)
+* Roth: balance of tax-exempt Roth account
+* fRoth: amount to pull from Roth this year
+* IRA2R: money converted from the IRA to Roth this year
+* rate: US tax bracket this year
+* tax: tax spent this year (includes IRA 10% penlty)
+* spend: net amount spent this year (includes SS)
