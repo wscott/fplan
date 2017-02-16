@@ -8,7 +8,6 @@ import scipy.optimize
 #   - Model inflation
 #     - scales: spending, tax brackets, SS
 #   - RMD
-#   - capital gains
 
 
 # Minimize: c^T * x
@@ -41,13 +40,13 @@ b = []
 # only married joint at the moment
 taxrates = [[0,     0.00, 0],
             [0.1,  0.10, 0.01],        # fake level to fix 0
-            [18.7,  0.15, 1.9],
-            [75.9,  0.25, 10.5],
-            [153.1, 0.28, 29.8],
-            [233.4, 0.33, 52.2],
-            [415.7, 0.35, 112.4],
-            [470.0, 0.40, 131.4]]
-stded = 12.7 + 2*4.05                 # standard deduction
+            [18700,  0.15, 1900],
+            [75900,  0.25, 10500],
+            [153100, 0.28, 29800],
+            [233400, 0.33, 52200],
+            [415700, 0.35, 112400],
+            [470000, 0.40, 131400]]
+stded = 12700 + 2*4050                 # standard deduction
 
 # spending each year needs to be more than goal after subtracting taxes
 # we do the taxes for each tax bracket as a separate constraint. Only the
@@ -81,7 +80,7 @@ for year in range(numyr):
         A += [row]
 
         # extra money needed at start of plan
-        if S['extra']:
+        if S['extra'] > 0:
             if year < S['extra_yr']:
                 if year + 1 > S['extra_yr']:
                     base += S['extra']*(S['extra_yr'] - year)
@@ -151,7 +150,7 @@ res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                                       "bland": True,
                                       "tol": 1.0e-9})
 
-print("Yearly spending <= ", 100*int(10*res.x[0]))
+print("Yearly spending <= ", 100*int(res.x[0]/100))
 print()
 print((" age" + " %6s" * 10) %
       ("saving", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
@@ -159,8 +158,8 @@ print((" age" + " %6s" * 10) %
 savings = S['aftertax']['bal']
 ira = S['IRA']['bal']
 roth = S['roth']['bal']
-ttax = 0
-tspend = 0
+ttax = 0.0
+tspend = 0.0
 for year in range(numyr):
     fsavings = res.x[1+year*vper]
     fira = res.x[1+year*vper+1]
@@ -193,10 +192,10 @@ for year in range(numyr):
         spending += S['socialsec']
     print((" %d:" + " %6.0f" * 10) %
           (year+S['startage'],
-           savings, fsavings,
-           ira, fira,
-           roth, froth, ira2roth,
-           rate * 100, tax, spending))
+           savings/1000, fsavings/1000,
+           ira/1000, fira/1000,
+           roth/1000, froth/1000, ira2roth/1000,
+           rate * 100, tax/1000, spending/1000))
     savings -= fsavings
     savings *= S['returns']
     ira -= fira
@@ -207,5 +206,5 @@ for year in range(numyr):
     roth *= S['returns']
 
 
-print("total tax: %.0f" % ttax)
-print("total spending: %.0f" % tspend)
+print("\ntotal spending: %.0f" % tspend)
+print("total tax: %.0f (%.1f%%)" % (ttax, 100*ttax/tspend))

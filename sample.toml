@@ -1,0 +1,34 @@
+# This an example input file
+
+# The format of this file will likely change in the future as
+# the program changes in the future.
+
+returns = 1.06		# return rate of investments (6% default)
+
+# age range to simulate
+startage = 55
+endage = 100		# stops at 99
+
+# assume Social Security will start paying $35k/yr at age 70
+socialsec = 35_000
+
+# extra payments required (here mortgage at $750/mo for 12 years)
+extra = 9_000
+extra_yr = 12
+
+# after tax savings accounts
+[aftertax]
+bal = 212_000
+basis = 115_000		# for capital gains tax
+
+# pre-tax IRA accounts
+[IRA]
+bal = 420_000
+
+# roth IRA accounts
+# in the future this will include the ability to separate contributions
+# from the account value and include the dates of the recent contributions.
+# Right now it is all a single contribution at the start of file plan
+# because the author just did a rollover. ;-)
+[roth]
+bal = 50_000
