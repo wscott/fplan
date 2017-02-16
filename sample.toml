@@ -10,7 +10,7 @@ startage = 55
 endage = 100		# stops at 99
 
 # assume Social Security will start paying $35k/yr at age 70
-socialsec = 35_000
+socialsec = 35000
 
 # extra payments required (here mortgage at $750/mo for 12 years)
 extra = 9_000
@@ -18,12 +18,12 @@ extra_yr = 12
 
 # after tax savings accounts
 [aftertax]
-bal = 212_000
-basis = 115_000		# for capital gains tax
+bal = 212000
+basis = 115000		# for capital gains tax
 
 # pre-tax IRA accounts
 [IRA]
-bal = 420_000
+bal = 420000
 
 # roth IRA accounts
 # in the future this will include the ability to separate contributions
@@ -31,4 +31,4 @@ bal = 420_000
 # Right now it is all a single contribution at the start of file plan
 # because the author just did a rollover. ;-)
 [roth]
-bal = 50_000
+bal = 50000

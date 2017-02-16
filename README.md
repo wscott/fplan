@@ -40,11 +40,11 @@ some new ideas.
 This program is written in Python and assumes the packages SciPy and
 toml are installed.
 
-* SciPy: https://www.scipy.org/install.html
-* toml: https://pypi.python.org/pypi/toml/
+run `pip install --user toml scipy numpy` to install these libraries
+on most machines.
 
 ## Usage
 
-* Copy sample.toml to a new file
+* Copy `sample.toml` to a new file
 * Edit with your information
 * run `python3 ./fplan.py NEW.toml`

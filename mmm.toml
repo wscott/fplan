@@ -1,16 +1,16 @@
 returns = 1.06
 startage = 35
 endage = 100
-socialsec = 50_000
+socialsec = 50000
 extra = 0
 extra_yr = 0
 
 [aftertax]
-bal = 200_000
-basis = 50_000
+bal = 200000
+basis = 50000
 
 [IRA]
-bal = 550_000
+bal = 550000
 
 [roth]
 bal = 0
