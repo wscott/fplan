@@ -4,10 +4,6 @@ import toml
 import argparse
 import scipy.optimize
 
-# TODO
-#   - RMD
-
-
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
 
@@ -45,6 +41,14 @@ taxrates = [[0,     0.00, 0],
             [415700, 0.35, 112400],
             [470000, 0.40, 131400]]
 stded = 12700 + 2*4050                 # standard deduction
+
+# Required Minimal Distributions from IRA starting with age 70
+RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,
+       18.7, 17.9, 17.1, 16.3, 15.5, 14.8, 14.1, 13.4, 12.7, 12.0,
+       11.4, 10.8, 10.2,  9.6,  9.1,  8.6,  8.1,  7.6,  7.1,  6.7,
+        6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,
+        3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
+
 i_rate = 1 + S['inflation'] / 100       # inflation rate: 2.5 -> 1.025
 r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 
@@ -58,14 +62,18 @@ r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
 for year in range(numyr):
     i_mul = i_rate ** year
+
+    # aftertax basis
+    if S['aftertax']['basis'] > 0:
+        basis = 1 - (S['aftertax']['basis'] /
+                     (S['aftertax']['bal']*r_rate**year))
+    else:
+        basis = 1
+
     for (cut, rate, base) in taxrates:
         row = [i_mul] + [0] * vper * numyr          # goal is positive
         cut *= i_mul
         base *= i_mul
-
-        # aftertax basis
-        basis = 1 - (S['aftertax']['basis'] /
-                     (S['aftertax']['bal']*r_rate**year))
 
         # aftertax withdrawal + capital gains tax
         row[1+vper*year+0] = -1 + basis * cg_tax
@@ -146,12 +154,27 @@ for year in range(max(0,59-S['startage']),numyr+1):
     else:
         b += [S['roth']['bal'] * r_rate ** year]
 
+# starting with age 70 the user must take RND payments
+for year in range(max(0,70-S['startage']),numyr):
+    row = [0] + [0] * vper * numyr
+    rmd = RMD[year-70]
+    for y in range(year):
+        row[1+vper*y+1] = -(r_rate ** (year - y))
+        row[1+vper*y+3] = -(r_rate ** (year - y))
+    row[1+vper*year+1] = -rmd
+    row[1+vper*year+3] = -rmd
+    A += [row]
+    b += [-(S['IRA']['bal'] * r_rate ** year)]
+
 print("Num vars: ", len(c))
 print("Num contraints: ", len(b))
 res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                              options={"disp": True,
                                       "bland": True,
-                                      "tol": 1.0e-9})
+                                      "tol": 1.0e-7})
+if res.success == False:
+    print(res)
+    exit(1)
 
 print("Yearly spending <= ", 100*int(res.x[0]/100))
 print()
@@ -186,8 +209,11 @@ for year in range(numyr):
     tax = (income - cut) * rate + base
 
     # aftertax basis
-    basis = 1 - (S['aftertax']['basis'] /
-                 (S['aftertax']['bal']*r_rate**year))
+    if S['aftertax']['basis'] > 0:
+        basis = 1 - (S['aftertax']['basis'] /
+                     (S['aftertax']['bal']*r_rate**year))
+    else:
+        basis = 1
     tax += fsavings * basis * cg_tax
     if S['startage'] + year < 59:
         tax += fira * 0.10

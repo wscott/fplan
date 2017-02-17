@@ -18,10 +18,10 @@ some new ideas.
 * Roth withdraw limitations before age 59
 * Early IRA withdrawals have a 10% penalty. (this is added to 'tax')
 * inflation
+* Required Minimum Distributions from IRA
 
 ## Not modeled yet
 
-* Required Minimum Distributions from IRA
 * Existing Roth contribution dates for before 59 withdraws
 * early withdrawals from Roth gains are not modeled
 * Recording when existing Roth contributions can be accessed in config file
