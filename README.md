@@ -2,19 +2,21 @@
 
 This little calculator is a retirement planner designed to explore
 optimial withdraws from savings and IRA accounts. It uses a Linear
-Programming solution to maximize the minimum abount of money available
+Programming solution to maximize the minimum amount of money available
 to spend. As a side effect it minimizes the taxes that needs to be
-spend.
+spent.
 
-This is similar to the ideas of James Welch at www.i-orp.com but I wanted to explore
-some new ideas. ORP continues to be a much more complete tool. This version is mainly aimed at people who retire well before 59.5.
+This is similar to the ideas of James Welch at www.i-orp.com but I
+wanted to explore some new ideas. ORP continues to be a much more
+complete tool. This version is mainly aimed at people who retire well
+before age 59.5.
 
 ## Currently modeled
 
 * aftertax, IRA and Roth spending
 * IRA->Roth conversions
 * Federal income tax on IRA spending with 2017 tables
-* Simplistic capital gains assuming an average cost basis at a fixed 15%
+* Simplistic capital gains, assuming an average cost basis, at a fixed 15%
 * Roth withdraw limitations before age 59
 * Early IRA withdrawals have a 10% penalty. (this is added to 'tax')
 * inflation
@@ -22,8 +24,7 @@ some new ideas. ORP continues to be a much more complete tool. This version is m
 
 ## Not modeled yet
 
-* Existing Roth contribution dates for before 59 withdraws
-* early withdrawals from Roth gains are not modeled
+* Early withdrawals from Roth gains are not modeled (only contributions)
 * Recording when existing Roth contributions can be accessed in config file
 
 ## Not modeled
