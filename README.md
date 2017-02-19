@@ -6,8 +6,8 @@ Programming solution to maximize the minimum abount of money available
 to spend. As a side effect it minimizes the taxes that needs to be
 spend.
 
-This is similar to the ideas at www.i-orp.com but I wanted to explore
-some new ideas.
+This is similar to the ideas of James Welch at www.i-orp.com but I wanted to explore
+some new ideas. ORP continues to be a much more complete tool. This version is mainly aimed at people who retire well before 59.5.
 
 ## Currently modeled
 
