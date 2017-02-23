@@ -12,11 +12,16 @@ endage = 100		# stops at 99
 
 # assume Social Security will start paying $35k/yr at age 70
 # the SS payout is scaled by inflation
-socialsec = 35000
+[income.social_sec]
+amount = 35000
+age = "70-"
+inflation = true
+tax = true                      # count this as income tax
 
 # extra payments required (here mortgage at $750/mo for 12 years)
-extra = 9000
-extra_yr = 12
+[expense.mortgage]
+amount = 9000
+age = "55-67"
 
 # after tax savings accounts
 [aftertax]

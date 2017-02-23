@@ -3,13 +3,65 @@
 import toml
 import argparse
 import scipy.optimize
+import re
+
+def agelist(str):
+    for x in str.split(','):
+        m = re.match('^(\d+)(-(\d+)?)?$', x)
+        if m:
+            s = int(m.group(1))
+            e = s
+            if m.group(2):
+                e = m.group(3)
+                if e:
+                    e = int(e)
+                else:
+                    e = 120
+            for a in range(s,e+1):
+                yield a
+        else:
+            raise Exception("Bad age " + str)
+
+def parse_expenses(S):
+    """ Return array of income/expense per year """
+    INC = [0] * numyr
+    EXP = [0] * numyr
+    TAX = [0] * numyr
+
+    for k,v in S.get('expense', {}).items():
+        for age in agelist(v['age']):
+            year = age - S['startage']
+            if year < 0:
+                continue
+            elif year >= numyr:
+                break
+            else:
+                amount = v['amount']
+                if v.get('inflation'):
+                    amount *= i_rate ** year
+                EXP[year] += amount
+
+    for k,v in S.get('income', {}).items():
+        for age in agelist(v['age']):
+            year = age - S['startage']
+            if year < 0:
+                continue
+            elif year >= numyr:
+                break
+            else:
+                amount = v['amount']
+                if v.get('inflation'):
+                    amount *= i_rate ** year
+                INC[year] += amount
+                if v.get('tax'):
+                    TAX[year] += amount
+    return (INC,EXP,TAX)
 
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
 
 #vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
 #all vars positive
-
 
 # Instantiate the parser
 parser = argparse.ArgumentParser()
@@ -19,9 +71,10 @@ args = parser.parse_args()
 
 with open(args.conffile) as conffile:
     S = toml.loads(conffile.read())
-cg_tax = 0.15
 
-numyr = S['endage'] - S['startage']
+cg_tax = 0.15                   # capital gains tax rate
+
+numyr = S.get('endage', 95) - S['startage']
 vper = 4        # variables per year (savings, ira, roth, ira2roth)
 
 # optimize this poly (we want to maximize the money we can spend)
@@ -43,10 +96,10 @@ taxrates = [[0,     0.00, 0],
 stded = 12700 + 2*4050                 # standard deduction
 
 # Required Minimal Distributions from IRA starting with age 70
-RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,
-       18.7, 17.9, 17.1, 16.3, 15.5, 14.8, 14.1, 13.4, 12.7, 12.0,
-       11.4, 10.8, 10.2,  9.6,  9.1,  8.6,  8.1,  7.6,  7.1,  6.7,
-        6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,
+RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
+       18.7, 17.9, 17.1, 16.3, 15.5, 14.8, 14.1, 13.4, 12.7, 12.0,  # age 80-89
+       11.4, 10.8, 10.2,  9.6,  9.1,  8.6,  8.1,  7.6,  7.1,  6.7,  # age 90-99
+        6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,  # age 100+
         3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
 
 i_rate = 1 + S['inflation'] / 100       # inflation rate: 2.5 -> 1.025
@@ -55,6 +108,7 @@ r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 # spending each year needs to be more than goal after subtracting taxes
 # we do the taxes for each tax bracket as a separate constraint. Only the
 # current range will contrain the output.
+(income,expenses,taxed) = parse_expenses(S)
 
 # The constraint starts like this:
 #   TAX = RATE * (IRA + IRA2ROTH + SS - SD - CUT) + BASE
@@ -90,27 +144,34 @@ for year in range(numyr):
         row[1+vper*year+3] = rate               # tax on Roth conversion
         A += [row]
 
-        # extra money needed at start of plan
-        if S['extra'] > 0:
-            if year < S['extra_yr']:
-                if year + 1 > S['extra_yr']:
-                    base += S['extra']*(S['extra_yr'] - year)
-                else:
-                    base += S['extra']
-
-        # social security (which is taxed)
-        if S['startage'] + year >= 70:
-            base -= S['socialsec']* i_mul * (1 - rate)
+        base -= income[year]                    # must spend all income this year (temp)
+        base += expenses[year]
+        base += taxed[year]*rate                # extra income is taxed
 
         # offset from having this taxrate from zero
         b += [(cut + stded) * rate * i_mul - base]
 
 # final balance for savings needs to be positive
 row = [0] + [0] * vper * numyr
+inc = 0
 for year in range(numyr):
     row[1+vper*year+0] = r_rate ** (numyr - year)
+    #if income[year] > 0:
+    #    inc += income[year] * r_rate ** (numyr - year)
 A += [row]
-b += [S['aftertax']['bal'] * r_rate ** numyr]
+b += [S['aftertax']['bal'] * r_rate ** numyr + inc]
+
+# any years with income need to be positive in aftertax
+# for year in range(numyr):
+#     if income[year] == 0:
+#         continue
+#     row = [0] + [0] * vper * numyr
+#     inc = 0
+#     for y in range(year):
+#         row[1+vper*y+0] = r_rate ** (year - y)
+#         inc += income[y] * r_rate ** (year - y)
+#     A += [row]
+#     b += [S['aftertax']['bal'] * r_rate ** year + inc]
 
 # final balance for IRA needs to be positive
 row = [0] + [0] * vper * numyr
@@ -154,15 +215,22 @@ for year in range(max(0,59-S['startage']),numyr+1):
     else:
         b += [S['roth']['bal'] * r_rate ** year]
 
-# starting with age 70 the user must take RND payments
+# starting with age 70 the user must take RMD payments
 for year in range(max(0,70-S['startage']),numyr):
     row = [0] + [0] * vper * numyr
-    rmd = RMD[year-70]
+    age = year + S['startage']
+    rmd = RMD[age - 70]
+
+    # the gains from the initial balance minus any withdraws gives
+    # the current balance.
     for y in range(year):
         row[1+vper*y+1] = -(r_rate ** (year - y))
         row[1+vper*y+3] = -(r_rate ** (year - y))
+
+    # this year's withdraw times the RMD factor needs to be more than
+    # the balance
     row[1+vper*year+1] = -rmd
-    row[1+vper*year+3] = -rmd
+
     A += [row]
     b += [-(S['IRA']['bal'] * r_rate ** year)]
 
@@ -170,17 +238,18 @@ print("Num vars: ", len(c))
 print("Num contraints: ", len(b))
 res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                              options={"disp": True,
-                                      "bland": True,
-                                      "tol": 1.0e-7})
+                                      #"bland": True,
+                                      "tol": 1.0e-6,
+                                      "maxiter": 3000})
 if res.success == False:
     print(res)
     exit(1)
 
 print("Yearly spending <= ", 100*int(res.x[0]/100))
 print()
-print((" age" + " %6s" * 10) %
-      ("saving", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
-       "rate", "tax", "spend"))
+print((" age" + " %5s" * 11) %
+      ("save", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
+       "rate", "tax", "spend", "extra"))
 savings = S['aftertax']['bal']
 ira = S['IRA']['bal']
 roth = S['roth']['bal']
@@ -192,21 +261,23 @@ for year in range(numyr):
     fira = res.x[1+year*vper+1]
     froth = res.x[1+year*vper+2]
     ira2roth = res.x[1+year*vper+3]
-    income = fira + ira2roth - stded*i_mul
-    if year + S['startage'] >= 70:
-        income += S['socialsec']*i_mul
-    if income < 0:
-        income = 0
+    inc = fira + ira2roth - stded*i_mul + taxed[year]
+
+    #if income[year]:
+    #    savings += income[year]
+
+    if inc < 0:
+        inc = 0
     for (cut, rate, base) in taxrates:
         cut *= i_mul
         base *= i_mul
-        if income < cut:
+        if inc < cut:
             break
         c = cut
         r = rate
         b = base
     (cut, rate, base) = (c, r, b)
-    tax = (income - cut) * rate + base
+    tax = (inc - cut) * rate + base
 
     # aftertax basis
     if S['aftertax']['basis'] > 0:
@@ -218,16 +289,15 @@ for year in range(numyr):
     if S['startage'] + year < 59:
         tax += fira * 0.10
     ttax += tax
-    spending = fsavings + fira + froth - tax
-    tspend += spending
-    if year + S['startage'] >= 70:
-        spending += S['socialsec']*i_mul
-    print((" %d:" + " %6.0f" * 10) %
+    extra = expenses[year] - income[year]
+    spending = fsavings + fira + froth - tax - extra
+    tspend += spending + extra
+    print((" %d:" + " %5.0f" * 11) %
           (year+S['startage'],
            savings/1000, fsavings/1000,
            ira/1000, fira/1000,
            roth/1000, froth/1000, ira2roth/1000,
-           rate * 100, tax/1000, spending/1000))
+           rate * 100, tax/1000, spending/1000, extra/1000))
 
     savings -= fsavings
     savings *= r_rate
