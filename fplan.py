@@ -76,9 +76,12 @@ cg_tax = 0.15                   # capital gains tax rate
 
 numyr = S.get('endage', 95) - S['startage']
 vper = 4        # variables per year (savings, ira, roth, ira2roth)
+n0 = 2          # num variables before per year starts
+sepp_end = max(5, 59-S['startage'])     # first year you can spend IRA reserved for SEPP
 
 # optimize this poly (we want to maximize the money we can spend)
-c = [-1] + [0] * vper * numyr
+c = [0] * (n0 + vper * numyr)
+c[0] = -1
 
 A = []
 b = []
@@ -110,6 +113,12 @@ r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 # current range will contrain the output.
 (income,expenses,taxed) = parse_expenses(S)
 
+# XXX new var must be zero
+row = [0] * (n0 + vper * numyr)
+row[1] = 1
+A += [row]
+b += [0]
+
 # The constraint starts like this:
 #   TAX = RATE * (IRA + IRA2ROTH + SS - SD - CUT) + BASE
 #   CG_TAX = SAVINGS * (1-(BASIS/(S_BAL*rate^YR))) * 20%
@@ -125,23 +134,24 @@ for year in range(numyr):
         basis = 1
 
     for (cut, rate, base) in taxrates:
-        row = [i_mul] + [0] * vper * numyr          # goal is positive
+        row = [0] * (n0 + vper * numyr)
+        row[0] = i_mul                           # goal is positive
         cut *= i_mul
         base *= i_mul
 
         # aftertax withdrawal + capital gains tax
-        row[1+vper*year+0] = -1 + basis * cg_tax
+        row[n0+vper*year+0] = -1 + basis * cg_tax
 
         if year + S['startage'] < 59:
-            row[1+vper*year+1] = -0.9 + rate    # 10% penelty
+            row[n0+vper*year+1] = -0.9 + rate    # 10% penelty
         else:
-            row[1+vper*year+1] = -1 + rate      # IRA - tax
+            row[n0+vper*year+1] = -1 + rate      # IRA - tax
 
         # XXX How to model 10% penelty for Roth before 59 other than
         # contributions
-        row[1+vper*year+2] = -1                 # Roth
+        row[n0+vper*year+2] = -1                 # Roth
 
-        row[1+vper*year+3] = rate               # tax on Roth conversion
+        row[n0+vper*year+3] = rate               # tax on Roth conversion
         A += [row]
 
         base -= income[year]                    # must spend all income this year (temp)
@@ -152,10 +162,10 @@ for year in range(numyr):
         b += [(cut + stded) * rate * i_mul - base]
 
 # final balance for savings needs to be positive
-row = [0] + [0] * vper * numyr
+row = [0] * (n0 + vper * numyr)
 inc = 0
 for year in range(numyr):
-    row[1+vper*year+0] = r_rate ** (numyr - year)
+    row[n0+vper*year+0] = r_rate ** (numyr - year)
     #if income[year] > 0:
     #    inc += income[year] * r_rate ** (numyr - year)
 A += [row]
@@ -165,29 +175,29 @@ b += [S['aftertax']['bal'] * r_rate ** numyr + inc]
 # for year in range(numyr):
 #     if income[year] == 0:
 #         continue
-#     row = [0] + [0] * vper * numyr
+#     row = [0] * (n0 + vper * numyr)
 #     inc = 0
 #     for y in range(year):
-#         row[1+vper*y+0] = r_rate ** (year - y)
+#         row[n0+vpy*y+0] = r_rate ** (year - y)
 #         inc += income[y] * r_rate ** (year - y)
 #     A += [row]
 #     b += [S['aftertax']['bal'] * r_rate ** year + inc]
 
 # final balance for IRA needs to be positive
-row = [0] + [0] * vper * numyr
+row = [0] * (n0 + vper * numyr)
 for year in range(numyr):
-    row[1+vper*year+1] = r_rate ** (numyr - year)
-    row[1+vper*year+3] = r_rate ** (numyr - year)
+    row[n0+vper*year+1] = r_rate ** (numyr - year)
+    row[n0+vper*year+3] = r_rate ** (numyr - year)
 A += [row]
 b += [S['IRA']['bal'] * r_rate ** numyr]
 
 # before 59, Roth can only spend from contributions
 for year in range(min(numyr, 59-S['startage'])):
-    row = [0] + [0] * vper * numyr
+    row = [0] * (n0 + vper * numyr)
     for y in range(0, year-4):
-        row[1+vper*y+3]=-1
+        row[n0+vper*y+3]=-1
     for y in range(year+1):
-        row[1+vper*y+2]=1
+        row[n0+vper*y+2]=1
     A += [row]
     if year < 5:
         b += [0]        # sum of convertions <= 0
@@ -197,16 +207,16 @@ for year in range(min(numyr, 59-S['startage'])):
 # after 59 all of Roth can be spent, but contributions need to age
 # 5 years and the balance each year needs to be positive
 for year in range(max(0,59-S['startage']),numyr+1):
-    row = [0] + [0] * vper * numyr
+    row = [0] * (n0 + vper * numyr)
 
     # remove previous withdrawls
     for y in range(year):
-        row[1+vper*y+2] = r_rate ** (year - y)
+        row[n0+vper*y+2] = r_rate ** (year - y)
 
     # add previous conversions, but we can only see things
     # converted more than 5 years ago
     for y in range(year-5):
-        row[1+vper*y+3] = -r_rate ** (year - y)
+        row[n0+vper*y+3] = -r_rate ** (year - y)
 
     A += [row]
     # only see initial balance after it has aged
@@ -217,19 +227,19 @@ for year in range(max(0,59-S['startage']),numyr+1):
 
 # starting with age 70 the user must take RMD payments
 for year in range(max(0,70-S['startage']),numyr):
-    row = [0] + [0] * vper * numyr
+    row = [0] * (n0 + vper * numyr)
     age = year + S['startage']
     rmd = RMD[age - 70]
 
     # the gains from the initial balance minus any withdraws gives
     # the current balance.
     for y in range(year):
-        row[1+vper*y+1] = -(r_rate ** (year - y))
-        row[1+vper*y+3] = -(r_rate ** (year - y))
+        row[n0+vper*y+1] = -(r_rate ** (year - y))
+        row[n0+vper*y+3] = -(r_rate ** (year - y))
 
     # this year's withdraw times the RMD factor needs to be more than
     # the balance
-    row[1+vper*year+1] = -rmd
+    row[n0+vper*year+1] = -rmd
 
     A += [row]
     b += [-(S['IRA']['bal'] * r_rate ** year)]
@@ -239,7 +249,7 @@ print("Num contraints: ", len(b))
 res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                              options={"disp": True,
                                       #"bland": True,
-                                      "tol": 1.0e-6,
+                                      "tol": 1.0e-7,
                                       "maxiter": 3000})
 if res.success == False:
     print(res)
@@ -257,10 +267,10 @@ ttax = 0.0
 tspend = 0.0
 for year in range(numyr):
     i_mul = i_rate ** year
-    fsavings = res.x[1+year*vper]
-    fira = res.x[1+year*vper+1]
-    froth = res.x[1+year*vper+2]
-    ira2roth = res.x[1+year*vper+3]
+    fsavings = res.x[n0+year*vper]
+    fira = res.x[n0+year*vper+1]
+    froth = res.x[n0+year*vper+2]
+    ira2roth = res.x[n0+year*vper+3]
     inc = fira + ira2roth - stded*i_mul + taxed[year]
 
     #if income[year]:
