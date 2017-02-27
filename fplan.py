@@ -65,7 +65,8 @@ def parse_expenses(S):
 
 # Instantiate the parser
 parser = argparse.ArgumentParser()
-
+parser.add_argument('--sepp', action='store_true',
+                    help="Enable SEPP processing")
 parser.add_argument('conffile')
 args = parser.parse_args()
 
@@ -78,6 +79,7 @@ numyr = S.get('endage', 95) - S['startage']
 vper = 4        # variables per year (savings, ira, roth, ira2roth)
 n0 = 2          # num variables before per year starts
 sepp_end = max(5, 59-S['startage'])     # first year you can spend IRA reserved for SEPP
+sepp_ratio = 25         # SEPP returns 1/ratio per year
 
 # optimize this poly (we want to maximize the money we can spend)
 c = [0] * (n0 + vper * numyr)
@@ -113,11 +115,12 @@ r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 # current range will contrain the output.
 (income,expenses,taxed) = parse_expenses(S)
 
-# XXX new var must be zero
-row = [0] * (n0 + vper * numyr)
-row[1] = 1
-A += [row]
-b += [0]
+if not args.sepp:
+    # force SEPP to zero
+    row = [0] * (n0 + vper * numyr)
+    row[1] = 1
+    A += [row]
+    b += [0]
 
 # The constraint starts like this:
 #   TAX = RATE * (IRA + IRA2ROTH + SS - SD - CUT) + BASE
@@ -136,6 +139,9 @@ for year in range(numyr):
     for (cut, rate, base) in taxrates:
         row = [0] * (n0 + vper * numyr)
         row[0] = i_mul                           # goal is positive
+
+        if year < sepp_end:
+            row[1] = (-1 + rate) * (1/sepp_ratio) # income from SEPP amount
         cut *= i_mul
         base *= i_mul
 
@@ -188,8 +194,19 @@ row = [0] * (n0 + vper * numyr)
 for year in range(numyr):
     row[n0+vper*year+1] = r_rate ** (numyr - year)
     row[n0+vper*year+3] = r_rate ** (numyr - year)
+    if year < sepp_end:
+        row[1] += (1/sepp_ratio) * r_rate ** (numyr - year)
 A += [row]
 b += [S['IRA']['bal'] * r_rate ** numyr]
+
+# IRA balance at SEPP end needs to not touch SEPP money
+row = [0] * (n0 + vper * numyr)
+for year in range(sepp_end):
+    row[n0+vper*year+1] = r_rate ** (sepp_end - year)
+    row[n0+vper*year+3] = r_rate ** (sepp_end - year)
+row[1] = r_rate ** sepp_end
+A += [row]
+b += [S['IRA']['bal'] * r_rate ** sepp_end]
 
 # before 59, Roth can only spend from contributions
 for year in range(min(numyr, 59-S['startage'])):
@@ -236,6 +253,8 @@ for year in range(max(0,70-S['startage']),numyr):
     for y in range(year):
         row[n0+vper*y+1] = -(r_rate ** (year - y))
         row[n0+vper*y+3] = -(r_rate ** (year - y))
+        if year < sepp_end:
+            row[1] -= (1/sepp_ratio) * r_rate ** (year - y)
 
     # this year's withdraw times the RMD factor needs to be more than
     # the balance
@@ -256,9 +275,11 @@ if res.success == False:
     exit(1)
 
 print("Yearly spending <= ", 100*int(res.x[0]/100))
+sepp = 100*int(res.x[1]/100)
+print("SEPP amount = ", sepp, sepp / sepp_ratio)
 print()
-print((" age" + " %5s" * 11) %
-      ("save", "spend", "IRA", "fIRA", "Roth", "fRoth", "IRA2R",
+print((" age" + " %5s" * 12) %
+      ("save", "spend", "IRA", "fIRA", "SEPP", "Roth", "fRoth", "IRA2R",
        "rate", "tax", "spend", "extra"))
 savings = S['aftertax']['bal']
 ira = S['IRA']['bal']
@@ -271,7 +292,11 @@ for year in range(numyr):
     fira = res.x[n0+year*vper+1]
     froth = res.x[n0+year*vper+2]
     ira2roth = res.x[n0+year*vper+3]
-    inc = fira + ira2roth - stded*i_mul + taxed[year]
+    if year < sepp_end:
+        sepp_spend = sepp/sepp_ratio
+    else:
+        sepp_spend = 0
+    inc = fira + ira2roth - stded*i_mul + taxed[year] + sepp_spend
 
     #if income[year]:
     #    savings += income[year]
@@ -300,19 +325,19 @@ for year in range(numyr):
         tax += fira * 0.10
     ttax += tax
     extra = expenses[year] - income[year]
-    spending = fsavings + fira + froth - tax - extra
+    spending = fsavings + fira + froth - tax - extra + sepp_spend
+
     tspend += spending + extra
-    print((" %d:" + " %5.0f" * 11) %
+    print((" %d:" + " %5.0f" * 12) %
           (year+S['startage'],
            savings/1000, fsavings/1000,
-           ira/1000, fira/1000,
+           ira/1000, fira/1000, sepp_spend/1000,
            roth/1000, froth/1000, ira2roth/1000,
            rate * 100, tax/1000, spending/1000, extra/1000))
 
     savings -= fsavings
     savings *= r_rate
-    ira -= fira
-    ira -= ira2roth
+    ira -= fira + sepp_spend + ira2roth
     ira *= r_rate
     roth -= froth
     roth += ira2roth
