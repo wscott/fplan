@@ -240,10 +240,11 @@ def solve():
         A += [row]
         b += [-(S['IRA']['bal'] * r_rate ** year)]
 
-    print("Num vars: ", len(c))
-    print("Num contraints: ", len(b))
+    if args.verbose:
+        print("Num vars: ", len(c))
+        print("Num contraints: ", len(b))
     res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
-                                 options={"disp": True,
+                                 options={"disp": args.verbose,
                                           #"bland": True,
                                           "tol": 1.0e-7,
                                           "maxiter": 3000})
@@ -326,10 +327,28 @@ def print_ascii(res):
     print("\ntotal spending: %.0f" % tspend)
     print("total tax: %.0f (%.1f%%)" % (ttax, 100*ttax/tspend))
 
+def print_csv(res):
+    print("spend goal,%d" % res[0])
+    print("savings,%d,%d" % (S['aftertax']['bal'], S['aftertax']['basis']))
+    print("ira,%d" % S['IRA']['bal'])
+    print("roth,%d" % S['roth']['bal'])
+
+    print("age,spend,fIRA,fROTH,IRA2R,income,expense");
+    for year in range(numyr):
+        fsavings = res[n0+year*vper]
+        fira = res[n0+year*vper+1]
+        froth = res[n0+year*vper+2]
+        ira2roth = res[n0+year*vper+3]
+        print(("%d," * 6 + "%d") % (year+S['startage'],fsavings,fira,froth,ira2roth,
+                                    income[year],expenses[year]))
+
 # Instantiate the parser
 parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help="Extra output from solver")
 parser.add_argument('--sepp', action='store_true',
                     help="Enable SEPP processing")
+parser.add_argument('--csv', action='store_true', help="Generate CSV outputs")
 parser.add_argument('conffile')
 args = parser.parse_args()
 
@@ -350,4 +369,7 @@ r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
 (income,expenses,taxed) = parse_expenses(S)
 
 res = solve()
-print_ascii(res)
+if args.csv:
+    print_csv(res)
+else:
+    print_ascii(res)
