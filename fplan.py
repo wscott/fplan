@@ -25,7 +25,6 @@ RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
         3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
 
 cg_tax = 0.15                   # capital gains tax rate
-sepp_ratio = 25         # SEPP returns 1/ratio per year
 
 def agelist(str):
     for x in str.split(','):
@@ -44,41 +43,60 @@ def agelist(str):
         else:
             raise Exception("Bad age " + str)
 
-def parse_expenses(S):
-    """ Return array of income/expense per year """
-    INC = [0] * numyr
-    EXP = [0] * numyr
-    TAX = [0] * numyr
+class Data:
+    def load_file(self, file):
+        with open(file) as conffile:
+            d = toml.loads(conffile.read())
+        self.i_rate = 1 + d.get('inflation', 0) / 100       # inflation rate: 2.5 -> 1.025
+        self.r_rate = 1 + d.get('returns', 6) / 100         # invest rate: 6 -> 1.06
 
-    for k,v in S.get('expense', {}).items():
-        for age in agelist(v['age']):
-            year = age - S['startage']
-            if year < 0:
-                continue
-            elif year >= numyr:
-                break
-            else:
-                amount = v['amount']
-                if v.get('inflation'):
-                    amount *= i_rate ** year
-                EXP[year] += amount
+        self.startage = d['startage']
+        self.endage = d.get('endage', max(96, self.startage+5))
+        self.numyr = self.endage - self.startage
+        self.aftertax = d['aftertax']
+        self.IRA = d['IRA']
+        self.roth = d['roth']
+        self.parse_expenses(d)
+        self.sepp_end = max(5, 59-self.startage)     # first year you can spend IRA reserved for SEPP
+        self.sepp_ratio = 25                         # money per-year from SEPP  (bal/ratio)
 
-    for k,v in S.get('income', {}).items():
-        for age in agelist(v['age']):
-            year = age - S['startage']
-            if year < 0:
-                continue
-            elif year >= numyr:
-                break
-            else:
-                amount = v['amount']
-                if v.get('inflation'):
-                    amount *= i_rate ** year
-                INC[year] += amount
-                if v.get('tax'):
-                    TAX[year] += amount
-    return (INC,EXP,TAX)
+    def parse_expenses(self, S):
+        """ Return array of income/expense per year """
+        INC = [0] * self.numyr
+        EXP = [0] * self.numyr
+        TAX = [0] * self.numyr
 
+        for k,v in S.get('expense', {}).items():
+            for age in agelist(v['age']):
+                year = age - self.startage
+                if year < 0:
+                    continue
+                elif year >= self.numyr:
+                    break
+                else:
+                    amount = v['amount']
+                    if v.get('inflation'):
+                        amount *= self.i_rate ** year
+                    EXP[year] += amount
+
+        for k,v in S.get('income', {}).items():
+            for age in agelist(v['age']):
+                year = age - self.startage
+                if year < 0:
+                    continue
+                elif year >= self.numyr:
+                    break
+                else:
+                    amount = v['amount']
+                    if v.get('inflation'):
+                        amount *= self.i_rate ** year
+                    INC[year] += amount
+                    if v.get('tax'):
+                        TAX[year] += amount
+        self.income = INC
+        self.expenses = EXP
+        self.taxed = TAX
+           
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
 
@@ -86,7 +104,7 @@ def parse_expenses(S):
 #all vars positive
 def solve():
     # optimize this poly (we want to maximize the money we can spend)
-    c = [0] * (n0 + vper * numyr)
+    c = [0] * (n0 + vper * S.numyr)
     c[0] = -1
 
     A = []
@@ -94,7 +112,7 @@ def solve():
 
     if not args.sepp:
         # force SEPP to zero
-        row = [0] * (n0 + vper * numyr)
+        row = [0] * (n0 + vper * S.numyr)
         row[1] = 1
         A += [row]
         b += [0]
@@ -103,29 +121,29 @@ def solve():
     #   TAX = RATE * (IRA + IRA2ROTH + SS - SD - CUT) + BASE
     #   CG_TAX = SAVINGS * (1-(BASIS/(S_BAL*rate^YR))) * 20%
     #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
-    for year in range(numyr):
-        i_mul = i_rate ** year
+    for year in range(S.numyr):
+        i_mul = S.i_rate ** year
 
         # aftertax basis
-        if S['aftertax']['basis'] > 0:
-            basis = 1 - (S['aftertax']['basis'] /
-                         (S['aftertax']['bal']*r_rate**year))
+        if S.aftertax['basis'] > 0:
+            basis = 1 - (S.aftertax['basis'] /
+                         (S.aftertax['bal']*S.r_rate**year))
         else:
             basis = 1
 
         for (cut, rate, base) in taxrates:
-            row = [0] * (n0 + vper * numyr)
+            row = [0] * (n0 + vper * S.numyr)
             row[0] = i_mul                           # goal is positive
 
-            if year < sepp_end:
-                row[1] = (-1 + rate) * (1/sepp_ratio) # income from SEPP amount
+            if year < S.sepp_end:
+                row[1] = (-1 + rate) * (1/S.sepp_ratio) # income from SEPP amount
             cut *= i_mul
             base *= i_mul
 
             # aftertax withdrawal + capital gains tax
             row[n0+vper*year+0] = -1 + basis * cg_tax
 
-            if year + S['startage'] < 59:
+            if year + S.startage < 59:
                 row[n0+vper*year+1] = -0.9 + rate    # 10% penelty
             else:
                 row[n0+vper*year+1] = -1 + rate      # IRA - tax
@@ -137,57 +155,57 @@ def solve():
             row[n0+vper*year+3] = rate               # tax on Roth conversion
             A += [row]
 
-            base -= income[year]                    # must spend all income this year (temp)
-            base += expenses[year]
-            base += taxed[year]*rate                # extra income is taxed
+            base -= S.income[year]                    # must spend all income this year (temp)
+            base += S.expenses[year]
+            base += S.taxed[year]*rate                # extra income is taxed
 
             # offset from having this taxrate from zero
             b += [(cut + stded) * rate * i_mul - base]
 
     # final balance for savings needs to be positive
-    row = [0] * (n0 + vper * numyr)
+    row = [0] * (n0 + vper * S.numyr)
     inc = 0
-    for year in range(numyr):
-        row[n0+vper*year+0] = r_rate ** (numyr - year)
-        #if income[year] > 0:
-        #    inc += income[year] * r_rate ** (numyr - year)
+    for year in range(S.numyr):
+        row[n0+vper*year+0] = S.r_rate ** (S.numyr - year)
+        #if S.income[year] > 0:
+        #    inc += S.income[year] * S.r_rate ** (S.numyr - year)
     A += [row]
-    b += [S['aftertax']['bal'] * r_rate ** numyr + inc]
+    b += [S.aftertax['bal'] * S.r_rate ** S.numyr + inc]
 
     # any years with income need to be positive in aftertax
-    # for year in range(numyr):
-    #     if income[year] == 0:
+    # for year in range(S.numyr):
+    #     if S.income[year] == 0:
     #         continue
-    #     row = [0] * (n0 + vper * numyr)
+    #     row = [0] * (n0 + vper * S.numyr)
     #     inc = 0
     #     for y in range(year):
-    #         row[n0+vpy*y+0] = r_rate ** (year - y)
-    #         inc += income[y] * r_rate ** (year - y)
+    #         row[n0+vpy*y+0] = S.r_rate ** (year - y)
+    #         inc += S.income[y] * S.r_rate ** (year - y)
     #     A += [row]
-    #     b += [S['aftertax']['bal'] * r_rate ** year + inc]
+    #     b += [S.aftertax['bal'] * S.r_rate ** year + inc]
 
     # final balance for IRA needs to be positive
-    row = [0] * (n0 + vper * numyr)
-    for year in range(numyr):
-        row[n0+vper*year+1] = r_rate ** (numyr - year)
-        row[n0+vper*year+3] = r_rate ** (numyr - year)
-        if year < sepp_end:
-            row[1] += (1/sepp_ratio) * r_rate ** (numyr - year)
+    row = [0] * (n0 + vper * S.numyr)
+    for year in range(S.numyr):
+        row[n0+vper*year+1] = S.r_rate ** (S.numyr - year)
+        row[n0+vper*year+3] = S.r_rate ** (S.numyr - year)
+        if year < S.sepp_end:
+            row[1] += (1/S.sepp_ratio) * S.r_rate ** (S.numyr - year)
     A += [row]
-    b += [S['IRA']['bal'] * r_rate ** numyr]
+    b += [S.IRA['bal'] * S.r_rate ** S.numyr]
 
     # IRA balance at SEPP end needs to not touch SEPP money
-    row = [0] * (n0 + vper * numyr)
-    for year in range(sepp_end):
-        row[n0+vper*year+1] = r_rate ** (sepp_end - year)
-        row[n0+vper*year+3] = r_rate ** (sepp_end - year)
-    row[1] = r_rate ** sepp_end
+    row = [0] * (n0 + vper * S.numyr)
+    for year in range(S.sepp_end):
+        row[n0+vper*year+1] = S.r_rate ** (S.sepp_end - year)
+        row[n0+vper*year+3] = S.r_rate ** (S.sepp_end - year)
+    row[1] = S.r_rate ** S.sepp_end
     A += [row]
-    b += [S['IRA']['bal'] * r_rate ** sepp_end]
+    b += [S.IRA['bal'] * S.r_rate ** S.sepp_end]
 
     # before 59, Roth can only spend from contributions
-    for year in range(min(numyr, 59-S['startage'])):
-        row = [0] * (n0 + vper * numyr)
+    for year in range(min(S.numyr, 59-S.startage)):
+        row = [0] * (n0 + vper * S.numyr)
         for y in range(0, year-4):
             row[n0+vper*y+3]=-1
         for y in range(year+1):
@@ -196,49 +214,49 @@ def solve():
         if year < 5:
             b += [0]        # sum of convertions <= 0
         else:
-            b += [S['roth']['bal']]
+            b += [S.roth['bal']]
 
     # after 59 all of Roth can be spent, but contributions need to age
     # 5 years and the balance each year needs to be positive
-    for year in range(max(0,59-S['startage']),numyr+1):
-        row = [0] * (n0 + vper * numyr)
+    for year in range(max(0,59-S.startage),S.numyr+1):
+        row = [0] * (n0 + vper * S.numyr)
 
         # remove previous withdrawls
         for y in range(year):
-            row[n0+vper*y+2] = r_rate ** (year - y)
+            row[n0+vper*y+2] = S.r_rate ** (year - y)
 
         # add previous conversions, but we can only see things
         # converted more than 5 years ago
         for y in range(year-5):
-            row[n0+vper*y+3] = -r_rate ** (year - y)
+            row[n0+vper*y+3] = -S.r_rate ** (year - y)
 
         A += [row]
         # only see initial balance after it has aged
         if year <= 5:
             b += [0]
         else:
-            b += [S['roth']['bal'] * r_rate ** year]
+            b += [S.roth['bal'] * S.r_rate ** year]
 
     # starting with age 70 the user must take RMD payments
-    for year in range(max(0,70-S['startage']),numyr):
-        row = [0] * (n0 + vper * numyr)
-        age = year + S['startage']
+    for year in range(max(0,70-S.startage),S.numyr):
+        row = [0] * (n0 + vper * S.numyr)
+        age = year + S.startage
         rmd = RMD[age - 70]
 
         # the gains from the initial balance minus any withdraws gives
         # the current balance.
         for y in range(year):
-            row[n0+vper*y+1] = -(r_rate ** (year - y))
-            row[n0+vper*y+3] = -(r_rate ** (year - y))
-            if year < sepp_end:
-                row[1] -= (1/sepp_ratio) * r_rate ** (year - y)
+            row[n0+vper*y+1] = -(S.r_rate ** (year - y))
+            row[n0+vper*y+3] = -(S.r_rate ** (year - y))
+            if year < S.sepp_end:
+                row[1] -= (1/S.sepp_ratio) * S.r_rate ** (year - y)
 
         # this year's withdraw times the RMD factor needs to be more than
         # the balance
         row[n0+vper*year+1] = -rmd
 
         A += [row]
-        b += [-(S['IRA']['bal'] * r_rate ** year)]
+        b += [-(S.IRA['bal'] * S.r_rate ** year)]
 
     if args.verbose:
         print("Num vars: ", len(c))
@@ -257,30 +275,30 @@ def solve():
 def print_ascii(res):
     print("Yearly spending <= ", 100*int(res[0]/100))
     sepp = 100*int(res[1]/100)
-    print("SEPP amount = ", sepp, sepp / sepp_ratio)
+    print("SEPP amount = ", sepp, sepp / S.sepp_ratio)
     print()
     print((" age" + " %5s" * 12) %
           ("save", "spend", "IRA", "fIRA", "SEPP", "Roth", "fRoth", "IRA2R",
            "rate", "tax", "spend", "extra"))
-    savings = S['aftertax']['bal']
-    ira = S['IRA']['bal']
-    roth = S['roth']['bal']
+    savings = S.aftertax['bal']
+    ira = S.IRA['bal']
+    roth = S.roth['bal']
     ttax = 0.0
     tspend = 0.0
-    for year in range(numyr):
-        i_mul = i_rate ** year
+    for year in range(S.numyr):
+        i_mul = S.i_rate ** year
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
         froth = res[n0+year*vper+2]
         ira2roth = res[n0+year*vper+3]
-        if year < sepp_end:
-            sepp_spend = sepp/sepp_ratio
+        if year < S.sepp_end:
+            sepp_spend = sepp/S.sepp_ratio
         else:
             sepp_spend = 0
-        inc = fira + ira2roth - stded*i_mul + taxed[year] + sepp_spend
+        inc = fira + ira2roth - stded*i_mul + S.taxed[year] + sepp_spend
 
-        #if income[year]:
-        #    savings += income[year]
+        #if S.income[year]:
+        #    savings += S.income[year]
 
         if inc < 0:
             inc = 0
@@ -296,51 +314,51 @@ def print_ascii(res):
         tax = (inc - cut) * rate + base
 
         # aftertax basis
-        if S['aftertax']['basis'] > 0:
-            basis = 1 - (S['aftertax']['basis'] /
-                         (S['aftertax']['bal']*r_rate**year))
+        if S.aftertax['basis'] > 0:
+            basis = 1 - (S.aftertax['basis'] /
+                         (S.aftertax['bal']*S.r_rate**year))
         else:
             basis = 1
         tax += fsavings * basis * cg_tax
-        if S['startage'] + year < 59:
+        if S.startage + year < 59:
             tax += fira * 0.10
         ttax += tax
-        extra = expenses[year] - income[year]
+        extra = S.expenses[year] - S.income[year]
         spending = fsavings + fira + froth - tax - extra + sepp_spend
 
         tspend += spending + extra
         print((" %d:" + " %5.0f" * 12) %
-              (year+S['startage'],
+              (year+S.startage,
                savings/1000, fsavings/1000,
                ira/1000, fira/1000, sepp_spend/1000,
                roth/1000, froth/1000, ira2roth/1000,
                rate * 100, tax/1000, spending/1000, extra/1000))
 
         savings -= fsavings
-        savings *= r_rate
+        savings *= S.r_rate
         ira -= fira + sepp_spend + ira2roth
-        ira *= r_rate
+        ira *= S.r_rate
         roth -= froth
         roth += ira2roth
-        roth *= r_rate
+        roth *= S.r_rate
 
     print("\ntotal spending: %.0f" % tspend)
     print("total tax: %.0f (%.1f%%)" % (ttax, 100*ttax/tspend))
 
 def print_csv(res):
     print("spend goal,%d" % res[0])
-    print("savings,%d,%d" % (S['aftertax']['bal'], S['aftertax']['basis']))
-    print("ira,%d" % S['IRA']['bal'])
-    print("roth,%d" % S['roth']['bal'])
+    print("savings,%d,%d" % (S.aftertax['bal'], S.aftertax['basis']))
+    print("ira,%d" % S.IRA['bal'])
+    print("roth,%d" % S.roth['bal'])
 
     print("age,spend,fIRA,fROTH,IRA2R,income,expense");
-    for year in range(numyr):
+    for year in range(S.numyr):
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
         froth = res[n0+year*vper+2]
         ira2roth = res[n0+year*vper+3]
-        print(("%d," * 6 + "%d") % (year+S['startage'],fsavings,fira,froth,ira2roth,
-                                    income[year],expenses[year]))
+        print(("%d," * 6 + "%d") % (year+S.startage,fsavings,fira,froth,ira2roth,
+                                    S.income[year],S.expenses[year]))
 
 # Instantiate the parser
 parser = argparse.ArgumentParser()
@@ -352,21 +370,11 @@ parser.add_argument('--csv', action='store_true', help="Generate CSV outputs")
 parser.add_argument('conffile')
 args = parser.parse_args()
 
-with open(args.conffile) as conffile:
-    S = toml.loads(conffile.read())
+S = Data()
+S.load_file(args.conffile)
 
-numyr = S.get('endage', 95) - S['startage']
 vper = 4        # variables per year (savings, ira, roth, ira2roth)
 n0 = 2          # num variables before per year starts
-sepp_end = max(5, 59-S['startage'])     # first year you can spend IRA reserved for SEPP
-
-i_rate = 1 + S['inflation'] / 100       # inflation rate: 2.5 -> 1.025
-r_rate = 1 + S['returns'] / 100         # invest rate: 6 -> 1.06
-
-# spending each year needs to be more than goal after subtracting taxes
-# we do the taxes for each tax bracket as a separate constraint. Only the
-# current range will contrain the output.
-(income,expenses,taxed) = parse_expenses(S)
 
 res = solve()
 if args.csv:
