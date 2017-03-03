@@ -1,0 +1,13 @@
+# example from this article
+
+# http://www.madfientist.com/how-to-access-retirement-funds-early/
+returns = 6
+inflation = 0
+startage = 30
+
+[prep]
+workyears = 10
+maxsave = 18000
+tax_rate = 25
+
+# no Social security

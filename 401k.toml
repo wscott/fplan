@@ -1,0 +1,19 @@
+
+# http://forum.mrmoneymustache.com/investor-alley/i-think-we-have-two-much-in-our-401ks
+
+startage = 50
+
+[prep]
+workyears = 3
+maxsave = 60000     # pre-tax dollars to save each year
+tax_rate = 25
+
+[IRA]
+bal = 840000
+maxcontrib = 60000
+
+[income.social_sec]
+amount = 40000
+age = "70-"
+inflation = true
+tax = true

@@ -21,19 +21,18 @@ before age 59.5.
 * Early IRA withdrawals have a 10% penalty. (this is added to 'tax')
 * inflation
 * Required Minimum Distributions from IRA
-* Arbitrary income or expenses happening at certain years. Income can be taxed or not.
-  This is used to model Social Security
+* Arbitrary income or expenses happening at certain years. Income can
+  be taxed or not.  This is used to model Social Security
+* IRA 72(t) withdrawals
 
 ## Not modeled yet
 
 * Early withdrawals from Roth gains are not modeled (only contributions)
 * Recording when existing Roth contributions can be accessed in config file
-* IRA 72(t) withdrawals
 
 ## Not modeled
 
 * Any other taxes
-* Income or a pre-retirement period
 * new contributions to IRA or Roth
 
 ## Assumptions
@@ -72,3 +71,10 @@ in table are in 1000s of dollars.
 * tax: tax spent this year (includes IRA 10% penlty)
 * spend: net amount spent this year (includes income)
 * extra: additional spending this year
+
+## Contact
+
+This tool is being actively developed and eventually will have a much
+more user-friendly inteface. At the moment it is closer to a research
+tool. That said, I am more than happy to help people to use it and
+understand the resuls. Send mail at Wayne <wsc9tt@gmail.com>
