@@ -1,0 +1,43 @@
+# http://forum.mrmoneymustache.com/taxes/wrote-a-retirement-calculator-because-i-orp-com-didn't-do-what-i-want/msg1460616/#msg1460616
+
+startage = 57
+returns = 6
+inflation = 2
+
+[IRA]
+bal = 1_700_000
+
+[roth]
+bal = 15_000
+
+[aftertax]
+bal = 1_250_000
+basis = 845_000
+
+[income.nqdc]
+amount = 115_000
+age = "57-68"
+tax = true
+
+[income.ss1]
+amount = 41979
+age = "70-"
+inflation = true
+tax = true
+
+[income.ss2]
+amount = 18080
+age = "67-"
+inflation = true
+tax = true
+
+[income.pension]
+tax = true
+#age = "57-"
+#amount = 83600
+#age = "63-"
+#amount = 131200
+age = "64-"
+amount = 142100
+#age = "65-"
+#amount = 150600

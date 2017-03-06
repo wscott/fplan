@@ -152,7 +152,7 @@ def solve():
 
         # max Roth per year
         row = [0] * nvars
-        row[n1+year*vper+2] = S.worktax
+        row[n1+year*vper+2] = 1
         A += [row]
         b += [S.roth['maxcontrib']]
 

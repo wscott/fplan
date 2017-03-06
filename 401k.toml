@@ -5,12 +5,12 @@ startage = 50
 
 [prep]
 workyears = 3
-maxsave = 60000     # pre-tax dollars to save each year
-tax_rate = 25
+maxsave = 40000     # pre-tax dollars to save each year
+tax_rate = 33
 
 [IRA]
 bal = 840000
-maxcontrib = 60000
+maxcontrib = 40000  # over 50 401k + 401k
 
 [income.social_sec]
 amount = 40000
