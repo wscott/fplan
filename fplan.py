@@ -72,6 +72,8 @@ class Data:
         self.roth = d.get('roth', {'bal': 0});
         if 'maxcontrib' not in self.roth:
             self.roth['maxcontrib'] = 5500*2
+        if 'contributions' not in self.roth:
+            self.roth['contributions'] = []
 
         self.parse_expenses(d)
         self.sepp_end = max(5, 59-self.retireage)     # first year you can spend IRA reserved for SEPP
@@ -262,10 +264,12 @@ def solve():
             row[n1+vper*y+2] = -1
 
         A += [row]
-        if year < 5:
-            b += [0]        # sum of convertions <= 0
-        else:
-            b += [S.roth['bal']]
+        # only see initial balance after it has aged
+        contrib = 0
+        for (age, amount) in S.roth['contributions']:
+            if age + 5 - S.retireage <= year:
+                contrib += amount
+        b += [contrib]
 
     # after 59 all of Roth can be spent, but contributions need to age
     # 5 years and the balance each year needs to be positive
@@ -281,16 +285,13 @@ def solve():
         for y in range(year-5):
             row[n0+vper*y+3] = -S.r_rate ** (year - y)
 
-        # add contributes from work period
+        # add contributions from work period
         for y in range(S.workyr):
             row[n1+vper*y+2] = -S.r_rate ** (S.workyr + year - y)
 
         A += [row]
-        # only see initial balance after it has aged
-        if year <= 5:
-            b += [0]
-        else:
-            b += [S.roth['bal'] * S.r_rate ** (S.workyr + year)]
+        # initial balance
+        b += [S.roth['bal'] * S.r_rate ** (S.workyr + year)]
 
     # starting with age 70 the user must take RMD payments
     for year in range(max(0,70-S.retireage),S.numyr):
@@ -323,7 +324,7 @@ def solve():
     res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
                                  options={"disp": args.verbose,
                                           #"bland": True,
-                                          "tol": 1.0e-7,
+                                          "tol": 1.0e-6,
                                           "maxiter": 3000})
     if res.success == False:
         print(res)

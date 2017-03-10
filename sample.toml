@@ -50,3 +50,9 @@ maxcontrib = 18000
 [roth]
 bal = 50000
 maxcontrib = 11000
+
+# record when contributions were made to this account.
+# before age 59 this is used to know when previous contributions can be
+# made. Include IRA->Roth conversions in this list.
+contributions = [[54, 20000],
+                 [55, 20000]]
