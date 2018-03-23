@@ -120,7 +120,7 @@ class Data:
 # Subject to: A_ub * x <= b_ub
 #vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
 #all vars positive
-def solve():
+def solve(args):
     # optimize this poly (we want to maximize the money we can spend)
     nvars = n1 + vper * (S.numyr + S.workyr)
     c = [0] * nvars
@@ -439,25 +439,37 @@ def print_csv(res):
         print(("%d," * 6 + "%d") % (year+S.retireage,fsavings,fira,froth,ira2roth,
                                     S.income[year],S.expenses[year]))
 
-# Instantiate the parser
-parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--verbose', action='store_true',
-                    help="Extra output from solver")
-parser.add_argument('--sepp', action='store_true',
-                    help="Enable SEPP processing")
-parser.add_argument('--csv', action='store_true', help="Generate CSV outputs")
-parser.add_argument('conffile')
-args = parser.parse_args()
+def main():
+    # Instantiate the parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help="Extra output from solver")
+    parser.add_argument('--sepp', action='store_true',
+                        help="Enable SEPP processing")
+    parser.add_argument('--csv', action='store_true', help="Generate CSV outputs")
+    parser.add_argument('--validate', action='store_true',
+                        help="compare single run to separate runs")
+    parser.add_argument('conffile')
+    args = parser.parse_args()
 
-S = Data()
-S.load_file(args.conffile)
+    global S
+    S = Data()
+    S.load_file(args.conffile)
 
-vper = 4        # variables per year (savings, ira, roth, ira2roth)
-n1 = 2          # before-retire years start here
-n0 = n1+S.workyr*vper   # post-retirement years start here
+    global vper, n0, n1
+    vper = 4        # variables per year (savings, ira, roth, ira2roth)
+    n1 = 2          # before-retire years start here
+    n0 = n1+S.workyr*vper   # post-retirement years start here
 
-res = solve()
-if args.csv:
-    print_csv(res)
-else:
-    print_ascii(res)
+    res = solve(args)
+    if args.csv:
+        print_csv(res)
+    else:
+        print_ascii(res)
+
+    if args.validate:
+        for y in range(1,nyears):
+            pass
+
+if __name__== "__main__":
+  main()
