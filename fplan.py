@@ -7,14 +7,14 @@ import re
 
 # 2017 table (could predict it moves with inflation?)
 # only married joint at the moment
-taxrates = [[0,     0.00, 0],
-            [0.1,  0.10, 0.01],        # fake level to fix 0
-            [18700,  0.15, 1900],
-            [75900,  0.25, 10500],
-            [153100, 0.28, 29800],
-            [233400, 0.33, 52200],
-            [415700, 0.35, 112400],
-            [470000, 0.40, 131400]]
+taxrates = [[0,     0.00],
+            [0.1,  0.10],        # fake level to fix 0
+            [18700,  0.15],
+            [75900,  0.25],
+            [153100, 0.28],
+            [233400, 0.33],
+            [415700, 0.35],
+            [470000, 0.40]]
 stded = 12700 + 2*4050                 # standard deduction
 
 # Required Minimal Distributions from IRA starting with age 70
@@ -173,7 +173,11 @@ def solve(args):
         else:
             basis = 1
 
-        for (cut, rate, base) in taxrates:
+        (taxbase, last_cut, last_rate) = (0, 0, 0)
+        for (cut, rate) in taxrates:
+            taxbase += (cut - last_cut) * last_rate
+            (last_cut, last_rate) = (cut, rate)
+            base = taxbase
             row = [0] * nvars
             row[0] = i_mul                           # goal is positive
 
@@ -381,7 +385,11 @@ def print_ascii(res):
 
         if inc < 0:
             inc = 0
-        for (cut, rate, base) in taxrates:
+        (taxbase, last_cut, last_rate) = (0, 0, 0)
+        for (cut, rate) in taxrates:
+            taxbase += (cut - last_cut) * last_rate
+            (last_cut, last_rate) = (cut, rate)
+            base = taxbase
             cut *= i_mul
             base *= i_mul
             if inc < cut:
