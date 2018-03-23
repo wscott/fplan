@@ -5,17 +5,18 @@ import argparse
 import scipy.optimize
 import re
 
-# 2017 table (could predict it moves with inflation?)
+# 2018 table (could predict it moves with inflation?)
 # only married joint at the moment
-taxrates = [[0,     0.00],
-            [0.1,  0.10],        # fake level to fix 0
-            [18700,  0.15],
-            [75900,  0.25],
-            [153100, 0.28],
-            [233400, 0.33],
-            [415700, 0.35],
-            [470000, 0.40]]
-stded = 12700 + 2*4050                 # standard deduction
+# last column is cumlutive tax and is computed
+taxrates = [[0,      0.00],
+            [0.1,    0.10],        # fake level to fix 0
+            [19050,  0.12],
+            [77400,  0.22],
+            [165000, 0.24],
+            [315000, 0.32],
+            [400000, 0.35],
+            [600000, 0.37]]
+stded = 24000            # standard deduction
 
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
