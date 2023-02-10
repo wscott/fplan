@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import toml
 import argparse
@@ -330,10 +330,7 @@ def solve(args):
         print("Num vars: ", len(c))
         print("Num contraints: ", len(b))
     res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
-                                 options={"disp": args.verbose,
-                                          #"bland": True,
-                                          "tol": 1.0e-6,
-                                          "maxiter": 3000})
+                                 options={"disp": args.verbose})
     if res.success == False:
         print(res)
         exit(1)
