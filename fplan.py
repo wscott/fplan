@@ -5,18 +5,17 @@ import argparse
 import scipy.optimize
 import re
 
-# 2018 table (could predict it moves with inflation?)
+# 2021 table (could predict it moves with inflation?)
 # only married joint at the moment
-# last column is cumlutive tax and is computed
 taxrates = [[0,      0.00],
             [0.1,    0.10],        # fake level to fix 0
-            [19050,  0.12],
-            [77400,  0.22],
-            [165000, 0.24],
-            [315000, 0.32],
-            [400000, 0.35],
-            [600000, 0.37]]
-stded = 24000            # standard deduction
+            [19900,  0.12],
+            [81050,  0.22],
+            [172750, 0.24],
+            [329859, 0.32],
+            [418850, 0.35],
+            [628300, 0.37]]
+stded = 25100            # standard deduction
 
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
@@ -25,7 +24,7 @@ RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
         6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,  # age 100+
         3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
 
-cg_tax = 0.15                   # capital gains tax rate
+cg_tax = 0.22                   # capital gains tax rate
 
 def agelist(str):
     for x in str.split(','):
@@ -53,6 +52,9 @@ class Data:
 
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
+        self.state_tax = d.get('state_tax', 0)
+        # self.state_ded = d.get('state_ded', 0)
+
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
             self.maxsave = d['prep']['maxsave']
@@ -68,11 +70,11 @@ class Data:
 
         self.IRA = d.get('IRA', {'bal': 0})
         if 'maxcontrib' not in self.IRA:
-            self.IRA['maxcontrib'] = 18000 + 5500*2
+            self.IRA['maxcontrib'] = 19500 + 7000*2
 
         self.roth = d.get('roth', {'bal': 0});
         if 'maxcontrib' not in self.roth:
-            self.roth['maxcontrib'] = 5500*2
+            self.roth['maxcontrib'] = 7000*2
         if 'contributions' not in self.roth:
             self.roth['contributions'] = []
 
@@ -176,6 +178,7 @@ def solve(args):
 
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in taxrates:
+            rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
@@ -388,6 +391,7 @@ def print_ascii(res):
             inc = 0
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in taxrates:
+            rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate
             (last_cut, last_rate) = (cut, rate)
             base = taxbase

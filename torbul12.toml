@@ -1,8 +1,8 @@
 # http://forum.mrmoneymustache.com/taxes/wrote-a-retirement-calculator-because-i-orp-com-didn't-do-what-i-want/msg1460616/#msg1460616
 
 startage = 57
-returns = 6
-inflation = 2
+returns = 4
+inflation = 0
 
 [IRA]
 bal = 1_700_000
