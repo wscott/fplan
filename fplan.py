@@ -5,17 +5,17 @@ import argparse
 import scipy.optimize
 import re
 
-# 2021 table (could predict it moves with inflation?)
+# 2023 table (could predict it moves with inflation?)
 # only married joint at the moment
 taxrates = [[0,      0.00],
             [0.1,    0.10],        # fake level to fix 0
-            [19900,  0.12],
-            [81050,  0.22],
-            [172750, 0.24],
-            [329859, 0.32],
-            [418850, 0.35],
-            [628300, 0.37]]
-stded = 25100            # standard deduction
+            [22000,  0.12],
+            [89450 ,  0.22],
+            [190750, 0.24],
+            [364200, 0.32],
+            [462500, 0.35],
+            [693750, 0.37]]
+stded = 27700            # standard deduction
 
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
@@ -24,7 +24,7 @@ RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
         6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,  # age 100+
         3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
 
-cg_tax = 0.22                   # capital gains tax rate
+cg_tax = 0.15                   # capital gains tax rate
 
 def agelist(str):
     for x in str.split(','):
@@ -53,7 +53,7 @@ class Data:
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
         self.state_tax = d.get('state_tax', 0)
-        # self.state_ded = d.get('state_ded', 0)
+        self.state_ded = d.get('state_ded', 0)
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
