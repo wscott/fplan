@@ -53,6 +53,7 @@ class Data:
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
         self.state_tax = d.get('state_tax', 0)
+        self.state_cg_tax = d.get('state_cg_tax', self.state_tax)
         self.state_ded = d.get('state_ded', 0)
 
         if 'prep' in d:
@@ -191,7 +192,7 @@ def solve(args):
             base *= i_mul
 
             # aftertax withdrawal + capital gains tax
-            row[n0+vper*year+0] = -1 + basis * cg_tax
+            row[n0+vper*year+0] = -1 + basis * cg_tax + S.state_cg_tax
 
             if year + S.retireage < 59:
                 row[n0+vper*year+1] = -0.9 + rate    # 10% penelty
@@ -409,6 +410,7 @@ def print_ascii(res):
         else:
             basis = 1
         tax += fsavings * basis * cg_tax
+        tax += fsavings * S.state_cg_tax
         if S.retireage + year < 59:
             tax += fira * 0.10
         ttax += tax
