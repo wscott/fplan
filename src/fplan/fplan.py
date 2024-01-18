@@ -202,7 +202,9 @@ def solve(args):
             # contributions
             row[n0+vper*year+2] = -1                 # Roth
 
-            row[n0+vper*year+3] = rate               # tax on Roth conversion
+            row[n0+vper*year+3] = rate + 0.0001       # tax on Roth conversion
+                                                      # + 0.0001 hack so that conversions 
+                                                      # look slightly inferior to withdrawals
             A += [row]
 
             base -= S.income[year]                    # must spend all income this year (temp)
