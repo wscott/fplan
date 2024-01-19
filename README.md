@@ -43,17 +43,16 @@ before age 59.5.
 
 ## Installing
 
-This program is written in Python and assumes the packages SciPy and
-toml are installed.
+This program is written in Python and can be installed locally with
+`pip install --user .`.
 
-run `pip install --user toml scipy numpy` to install these libraries
-on most machines.
+I am new to Python packaging so hints to make this easier for people are appreciated
 
 ## Usage
 
 * Copy `sample.toml` to a new file
 * Edit with your information
-* run `python3 ./fplan.py NEW.toml`
+* run `fplan NEW.toml`
 
 ## Output
 
@@ -74,7 +73,7 @@ in table are in 1000s of dollars.
 
 ## Contact
 
-This tool is being actively developed and eventually will have a much
-more user-friendly inteface. At the moment it is closer to a research
-tool. That said, I am more than happy to help people to use it and
-understand the resuls. Send mail at Wayne <wsc9tt@gmail.com>
+This tools has been somewhat on the back burner for a couple years.
+That said, I am more than happy to help people to use it and
+understand the resuls. Send mail at Wayne <wsc9tt@gmail.com> or
+file issues on github.

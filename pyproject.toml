@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fplan"
+version = "0.3"
+authors = [
+  { name="Wayne Scott", email="wsc9tt@gmail.com" },
+]
+description = "Early retirement financial calculator"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "toml",
+    "scipy"
+]
+
+[project.scripts]
+fplan = "fplan:main"
+
+[project.urls]
+Homepage = "https://github.com/wscott/fplan"
+Issues = "https://github.com/wscott/fplan/issues"
