@@ -5,18 +5,6 @@ import argparse
 import scipy.optimize
 import re
 
-# 2023 table (could predict it moves with inflation?)
-# only married joint at the moment
-taxrates = [[0,      0.00],
-            [0.1,    0.10],        # fake level to fix 0
-            [22000,  0.12],
-            [89450 ,  0.22],
-            [190750, 0.24],
-            [364200, 0.32],
-            [462500, 0.35],
-            [693750, 0.37]]
-stded = 27700            # standard deduction
-
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
        18.7, 17.9, 17.1, 16.3, 15.5, 14.8, 14.1, 13.4, 12.7, 12.0,  # age 80-89
@@ -52,6 +40,17 @@ class Data:
 
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
+
+        self.taxrates = d.get('taxrates', 
+                              [[0,      0.10],
+                               [22000,  0.12],
+                               [89450 ,  0.22],
+                               [190750, 0.24],
+                               [364200, 0.32],
+                               [462500, 0.35],
+                               [693750, 0.37]])
+        self.stded = d.get('stded', 27700)
+
         self.state_tax = d.get('state_tax', 0)
         self.state_ded = d.get('state_ded', 0)
 
@@ -177,7 +176,7 @@ def solve(args):
             basis = 1
 
         (taxbase, last_cut, last_rate) = (0, 0, 0)
-        for (cut, rate) in taxrates:
+        for (cut, rate) in S.taxrates:
             rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate
             (last_cut, last_rate) = (cut, rate)
@@ -210,7 +209,7 @@ def solve(args):
             base += S.taxed[year]*rate                # extra income is taxed
 
             # offset from having this taxrate from zero
-            b += [(cut + stded) * rate * i_mul - base]
+            b += [(cut + S.stded) * rate * i_mul - base]
 
     # final balance for savings needs to be positive
     row = [0] * nvars
@@ -379,7 +378,7 @@ def print_ascii(res):
             sepp_spend = sepp/S.sepp_ratio
         else:
             sepp_spend = 0
-        inc = fira + ira2roth - stded*i_mul + S.taxed[year] + sepp_spend
+        inc = fira + ira2roth - S.stded*i_mul + S.taxed[year] + sepp_spend
 
         #if S.income[year]:
         #    savings += S.income[year]
@@ -387,7 +386,7 @@ def print_ascii(res):
         if inc < 0:
             inc = 0
         (taxbase, last_cut, last_rate) = (0, 0, 0)
-        for (cut, rate) in taxrates:
+        for (cut, rate) in S.taxrates:
             rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate
             (last_cut, last_rate) = (cut, rate)
