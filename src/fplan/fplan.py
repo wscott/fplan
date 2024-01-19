@@ -98,7 +98,7 @@ class Data:
                 else:
                     amount = v['amount']
                     if v.get('inflation'):
-                        amount *= self.i_rate ** year
+                        amount *= self.i_rate ** (year + self.workyr)
                     EXP[year] += amount
 
         for k,v in S.get('income', {}).items():
@@ -111,7 +111,7 @@ class Data:
                 else:
                     amount = v['amount']
                     if v.get('inflation'):
-                        amount *= self.i_rate ** year
+                        amount *= self.i_rate ** (year + self.workyr)
                     INC[year] += amount
                     if v.get('tax'):
                         TAX[year] += amount
@@ -166,13 +166,13 @@ def solve(args):
     #   CG_TAX = SAVINGS * (1-(BASIS/(S_BAL*rate^YR))) * 20%
     #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
     for year in range(S.numyr):
-        i_mul = S.i_rate ** year
+        i_mul = S.i_rate ** (year + S.workyr)
 
         # aftertax basis
         # XXX fix work contributions
         if S.aftertax['basis'] > 0:
             basis = 1 - (S.aftertax['basis'] /
-                         (S.aftertax['bal']*S.r_rate**year))
+                         (S.aftertax['bal']*S.r_rate**(year + S.workyr)))
         else:
             basis = 1
 
@@ -370,7 +370,7 @@ def print_ascii(res):
     ttax = 0.0
     tspend = 0.0
     for year in range(S.numyr):
-        i_mul = S.i_rate ** year
+        i_mul = S.i_rate ** (year + S.workyr)
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
         froth = res[n0+year*vper+2]
