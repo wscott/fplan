@@ -1,0 +1,26 @@
+# https://forum.mrmoneymustache.com/case-studies/tweak-our-plan-or-give-us-a-kick-in-the-pants/?topicseen
+returns = 8
+inflation = 2
+
+startage = 40
+
+# assume Social Security will start paying $35k/yr at age 70
+# the SS payout is scaled by inflation
+[income.social_sec]
+amount = 20000
+age = "70-"
+inflation = true
+tax = true                      # count this as income tax
+
+[income.side]
+amount = 15000
+age = "34-"
+
+[IRA]
+bal = 430000
+maxcontrib = 18000
+
+[roth]
+bal = 0
+maxcontrib = 11000
+
