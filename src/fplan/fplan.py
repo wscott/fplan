@@ -329,7 +329,7 @@ def solve(args):
     if args.verbose:
         print("Num vars: ", len(c))
         print("Num contraints: ", len(b))
-    res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
+    res = scipy.optimize.linprog(c, A_ub=A, b_ub=b, method="highs-ipm",
                                  options={"disp": args.verbose})
     if res.success == False:
         print(res)
