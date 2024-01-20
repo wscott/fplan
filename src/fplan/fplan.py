@@ -179,7 +179,7 @@ def solve(args):
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in taxrates:
             rate += S.state_tax
-            taxbase += (cut - last_cut) * last_rate
+            taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             row = [0] * nvars
@@ -188,8 +188,6 @@ def solve(args):
             if year < S.sepp_end:
                 row[1] = (-1 + rate) * (1/S.sepp_ratio) # income from SEPP amount
             cut *= i_mul
-            base *= i_mul
-
             # aftertax withdrawal + capital gains tax
             row[n0+vper*year+0] = -1 + basis * cg_tax
 
@@ -210,7 +208,7 @@ def solve(args):
             base += S.taxed[year]*rate                # extra income is taxed
 
             # offset from having this taxrate from zero
-            b += [(cut + stded) * rate * i_mul - base]
+            b += [(cut + S.stded * i_mul) * rate - base]
 
     # final balance for savings needs to be positive
     row = [0] * nvars
@@ -389,11 +387,10 @@ def print_ascii(res):
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in taxrates:
             rate += S.state_tax
-            taxbase += (cut - last_cut) * last_rate
+            taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             cut *= i_mul
-            base *= i_mul
             if inc < cut:
                 break
             c = cut
