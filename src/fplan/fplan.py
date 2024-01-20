@@ -147,19 +147,19 @@ def solve(args):
         row[n1+year*vper+1] = 1
         row[n1+year*vper+2] = S.worktax
         A += [row]
-        b += [S.maxsave]
+        b += [S.maxsave * S.i_rate ** year]
 
         # max IRA per year
         row = [0] * nvars
         row[n1+year*vper+1] = 1
         A += [row]
-        b += [S.IRA['maxcontrib']]
+        b += [S.IRA['maxcontrib'] * S.i_rate ** year]
 
         # max Roth per year
         row = [0] * nvars
         row[n1+year*vper+2] = 1
         A += [row]
-        b += [S.roth['maxcontrib']]
+        b += [S.roth['maxcontrib'] * S.i_rate ** year]
 
     # The constraint starts like this:
     #   TAX = RATE * (IRA + IRA2ROTH + SS - SD - CUT) + BASE
