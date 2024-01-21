@@ -409,8 +409,7 @@ def print_ascii(res):
                          (S.aftertax['bal']*S.r_rate**year))
         else:
             basis = 1
-        tax += fsavings * basis * cg_tax
-        tax += fsavings * basis * S.state_cg_tax
+        tax += fsavings * basis * (cg_tax + S.state_cg_tax)
         if S.retireage + year < 59:
             tax += fira * 0.10
         ttax += tax
