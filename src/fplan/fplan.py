@@ -41,10 +41,13 @@ class Data:
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
 
+        # 2023 tax table (could predict it moves with inflation?)
+        # married joint at the moment, can override in config file
         self.taxrates = d.get('taxrates',
-                              [[0,      0.10],
+                              [[0,      0.00],
+                               [0.1,    0.10], # fake level to fix 0
                                [22000,  0.12],
-                               [89450 ,  0.22],
+                               [89450 , 0.22],
                                [190750, 0.24],
                                [364200, 0.32],
                                [462500, 0.35],
