@@ -126,16 +126,10 @@ class Data:
 #vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
 #all vars positive
 def solve(args):
-    # optimize this poly (we want to maximize the money we can spend every year)
+    # optimize this poly (we want to maximize the money we can spend)
     nvars = n1 + vper * (S.numyr + S.workyr)
     c = [0] * nvars
     c[0] = -1
-
-    # and 1/10 the average spending to make total money a secondary target
-    for year in range(S.numyr):
-        c[n1+year*vper+0] = 1.0 / S.numyr / 10
-        c[n1+year*vper+1] = 1.0 / S.numyr / 10
-        c[n1+year*vper+2] = 1.0 / S.numyr / 10
 
     A = []
     b = []
