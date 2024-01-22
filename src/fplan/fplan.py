@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-import toml
 import argparse
-import scipy.optimize
 import re
+import toml
+import scipy.optimize
 
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
@@ -16,7 +16,7 @@ cg_tax = 0.15                   # capital gains tax rate
 
 def agelist(str):
     for x in str.split(','):
-        m = re.match('^(\d+)(-(\d+)?)?$', x)
+        m = re.match(r'^(\d+)(-(\d+)?)?$', x)
         if m:
             s = int(m.group(1))
             e = s
@@ -41,7 +41,7 @@ class Data:
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
 
-        self.taxrates = d.get('taxrates', 
+        self.taxrates = d.get('taxrates',
                               [[0,      0.10],
                                [22000,  0.12],
                                [89450 ,  0.22],
@@ -71,15 +71,15 @@ class Data:
         if 'maxcontrib' not in self.IRA:
             self.IRA['maxcontrib'] = 19500 + 7000*2
 
-        self.roth = d.get('roth', {'bal': 0});
+        self.roth = d.get('roth', {'bal': 0})
         if 'maxcontrib' not in self.roth:
             self.roth['maxcontrib'] = 7000*2
         if 'contributions' not in self.roth:
             self.roth['contributions'] = []
 
         self.parse_expenses(d)
-        self.sepp_end = max(5, 59-self.retireage)     # first year you can spend IRA reserved for SEPP
-        self.sepp_ratio = 25                         # money per-year from SEPP  (bal/ratio)
+        self.sepp_end = max(5, 59-self.retireage)  # first year you can spend IRA reserved for SEPP
+        self.sepp_ratio = 25                       # money per-year from SEPP  (bal/ratio)
 
     def parse_expenses(self, S):
         """ Return array of income/expense per year """
@@ -316,7 +316,7 @@ def solve(args):
 
         # include deposits during work years
         for y in range(S.workyr):
-            row[n1+vper*y+1] = (S.r_rate ** (S.workyr + year - y))
+            row[n1+vper*y+1] = S.r_rate ** (S.workyr + year - y)
 
         # this year's withdraw times the RMD factor needs to be more than
         # the balance
@@ -438,7 +438,7 @@ def print_csv(res):
     print("ira,%d" % S.IRA['bal'])
     print("roth,%d" % S.roth['bal'])
 
-    print("age,spend,fIRA,fROTH,IRA2R,income,expense");
+    print("age,spend,fIRA,fROTH,IRA2R,income,expense")
     for year in range(S.numyr):
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
@@ -480,4 +480,4 @@ def main():
             pass
 
 if __name__== "__main__":
-  main()
+    main()
