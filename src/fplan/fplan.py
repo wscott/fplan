@@ -60,6 +60,7 @@ class Data:
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
             self.maxsave = d['prep']['maxsave']
+            self.maxsave_inflation = d['prep'].get('inflation', True)
             self.worktax = 1 + d['prep'].get('tax_rate', 25)/100
         else:
             self.workyr = 0
@@ -149,7 +150,10 @@ def solve(args):
         row[n1+year*vper+1] = 1
         row[n1+year*vper+2] = S.worktax
         A += [row]
-        b += [S.maxsave * S.i_rate ** year]
+        if S.maxsave_inflation:
+            b += [S.maxsave * S.i_rate ** year]
+        else:
+            b += [S.maxsave]
 
         # max IRA per year
         row = [0] * nvars

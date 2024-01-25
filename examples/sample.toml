@@ -16,6 +16,7 @@ endage = 100		# stops at 99
 [prep]
 workyears = 10      # we retire at startage + 10
 maxsave = 60000     # and save up $60k/yr (pre-tax)
+inflation = false   # should the maxsave increase with inflation, default: true
 tax_rate = 25       # in 25% bracket while working
 
 
