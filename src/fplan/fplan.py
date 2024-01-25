@@ -1,21 +1,9 @@
 #!/usr/bin/env python3
 
-import toml
 import argparse
-import scipy.optimize
 import re
-
-# 2023 table (could predict it moves with inflation?)
-# only married joint at the moment
-taxrates = [[0,      0.00],
-            [0.1,    0.10],        # fake level to fix 0
-            [22000,  0.12],
-            [89450 ,  0.22],
-            [190750, 0.24],
-            [364200, 0.32],
-            [462500, 0.35],
-            [693750, 0.37]]
-stded = 27700            # standard deduction
+import toml
+import scipy.optimize
 
 # Required Minimal Distributions from IRA starting with age 70
 RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
@@ -28,7 +16,7 @@ cg_tax = 0.15                   # capital gains tax rate
 
 def agelist(str):
     for x in str.split(','):
-        m = re.match('^(\d+)(-(\d+)?)?$', x)
+        m = re.match(r'^(\d+)(-(\d+)?)?$', x)
         if m:
             s = int(m.group(1))
             e = s
@@ -52,6 +40,20 @@ class Data:
 
         self.startage = d['startage']
         self.endage = d.get('endage', max(96, self.startage+5))
+
+        # 2023 tax table (could predict it moves with inflation?)
+        # married joint at the moment, can override in config file
+        self.taxrates = d.get('taxrates',
+                              [[0,      0.00],
+                               [0.1,    0.10], # fake level to fix 0
+                               [22000,  0.12],
+                               [89450 , 0.22],
+                               [190750, 0.24],
+                               [364200, 0.32],
+                               [462500, 0.35],
+                               [693750, 0.37]])
+        self.stded = d.get('stded', 27700)
+
         self.state_tax = d.get('state_tax', 0)
         self.state_ded = d.get('state_ded', 0)
 
@@ -72,15 +74,15 @@ class Data:
         if 'maxcontrib' not in self.IRA:
             self.IRA['maxcontrib'] = 19500 + 7000*2
 
-        self.roth = d.get('roth', {'bal': 0});
+        self.roth = d.get('roth', {'bal': 0})
         if 'maxcontrib' not in self.roth:
             self.roth['maxcontrib'] = 7000*2
         if 'contributions' not in self.roth:
             self.roth['contributions'] = []
 
         self.parse_expenses(d)
-        self.sepp_end = max(5, 59-self.retireage)     # first year you can spend IRA reserved for SEPP
-        self.sepp_ratio = 25                         # money per-year from SEPP  (bal/ratio)
+        self.sepp_end = max(5, 59-self.retireage)  # first year you can spend IRA reserved for SEPP
+        self.sepp_ratio = 25                       # money per-year from SEPP  (bal/ratio)
 
     def parse_expenses(self, S):
         """ Return array of income/expense per year """
@@ -98,7 +100,7 @@ class Data:
                 else:
                     amount = v['amount']
                     if v.get('inflation'):
-                        amount *= self.i_rate ** year
+                        amount *= self.i_rate ** (year + self.workyr)
                     EXP[year] += amount
 
         for k,v in S.get('income', {}).items():
@@ -111,7 +113,7 @@ class Data:
                 else:
                     amount = v['amount']
                     if v.get('inflation'):
-                        amount *= self.i_rate ** year
+                        amount *= self.i_rate ** (year + self.workyr)
                     INC[year] += amount
                     if v.get('tax'):
                         TAX[year] += amount
@@ -166,20 +168,20 @@ def solve(args):
     #   CG_TAX = SAVINGS * (1-(BASIS/(S_BAL*rate^YR))) * 20%
     #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
     for year in range(S.numyr):
-        i_mul = S.i_rate ** year
+        i_mul = S.i_rate ** (year + S.workyr)
 
         # aftertax basis
         # XXX fix work contributions
         if S.aftertax['basis'] > 0:
             basis = 1 - (S.aftertax['basis'] /
-                         (S.aftertax['bal']*S.r_rate**year))
+                         (S.aftertax['bal']*S.r_rate**(year + S.workyr)))
         else:
             basis = 1
 
         (taxbase, last_cut, last_rate) = (0, 0, 0)
-        for (cut, rate) in taxrates:
+        for (cut, rate) in S.taxrates:
             rate += S.state_tax
-            taxbase += (cut - last_cut) * last_rate
+            taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             row = [0] * nvars
@@ -188,8 +190,6 @@ def solve(args):
             if year < S.sepp_end:
                 row[1] = (-1 + rate) * (1/S.sepp_ratio) # income from SEPP amount
             cut *= i_mul
-            base *= i_mul
-
             # aftertax withdrawal + capital gains tax
             row[n0+vper*year+0] = -1 + basis * cg_tax
 
@@ -202,7 +202,9 @@ def solve(args):
             # contributions
             row[n0+vper*year+2] = -1                 # Roth
 
-            row[n0+vper*year+3] = rate               # tax on Roth conversion
+            row[n0+vper*year+3] = rate + 0.0001       # tax on Roth conversion
+                                                      # + 0.0001 hack so that conversions 
+                                                      # look slightly inferior to withdrawals
             A += [row]
 
             base -= S.income[year]                    # must spend all income this year (temp)
@@ -210,7 +212,7 @@ def solve(args):
             base += S.taxed[year]*rate                # extra income is taxed
 
             # offset from having this taxrate from zero
-            b += [(cut + stded) * rate * i_mul - base]
+            b += [(cut + S.stded * i_mul) * rate - base]
 
     # final balance for savings needs to be positive
     row = [0] * nvars
@@ -317,7 +319,7 @@ def solve(args):
 
         # include deposits during work years
         for y in range(S.workyr):
-            row[n1+vper*y+1] = (S.r_rate ** (S.workyr + year - y))
+            row[n1+vper*y+1] = S.r_rate ** (S.workyr + year - y)
 
         # this year's withdraw times the RMD factor needs to be more than
         # the balance
@@ -329,7 +331,7 @@ def solve(args):
     if args.verbose:
         print("Num vars: ", len(c))
         print("Num contraints: ", len(b))
-    res = scipy.optimize.linprog(c, A_ub=A, b_ub=b,
+    res = scipy.optimize.linprog(c, A_ub=A, b_ub=b, method="highs-ipm",
                                  options={"disp": args.verbose})
     if res.success == False:
         print(res)
@@ -370,7 +372,7 @@ def print_ascii(res):
     ttax = 0.0
     tspend = 0.0
     for year in range(S.numyr):
-        i_mul = S.i_rate ** year
+        i_mul = S.i_rate ** (year + S.workyr)
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
         froth = res[n0+year*vper+2]
@@ -379,7 +381,7 @@ def print_ascii(res):
             sepp_spend = sepp/S.sepp_ratio
         else:
             sepp_spend = 0
-        inc = fira + ira2roth - stded*i_mul + S.taxed[year] + sepp_spend
+        inc = fira + ira2roth - S.stded*i_mul + S.taxed[year] + sepp_spend
 
         #if S.income[year]:
         #    savings += S.income[year]
@@ -387,13 +389,12 @@ def print_ascii(res):
         if inc < 0:
             inc = 0
         (taxbase, last_cut, last_rate) = (0, 0, 0)
-        for (cut, rate) in taxrates:
+        for (cut, rate) in S.taxrates:
             rate += S.state_tax
-            taxbase += (cut - last_cut) * last_rate
+            taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             cut *= i_mul
-            base *= i_mul
             if inc < cut:
                 break
             c = cut
@@ -440,7 +441,7 @@ def print_csv(res):
     print("ira,%d" % S.IRA['bal'])
     print("roth,%d" % S.roth['bal'])
 
-    print("age,spend,fIRA,fROTH,IRA2R,income,expense");
+    print("age,spend,fIRA,fROTH,IRA2R,income,expense")
     for year in range(S.numyr):
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
@@ -482,4 +483,4 @@ def main():
             pass
 
 if __name__== "__main__":
-  main()
+    main()
