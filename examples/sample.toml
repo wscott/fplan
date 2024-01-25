@@ -12,6 +12,17 @@ inflation = 2.1		# yearly inflation rate
 startage = 55
 endage = 100		# stops at 99
 
+# This tax bracket is for MFJ in 2023.  These are the default values.
+taxrates =  [[0,      10],
+             [22000,  12],
+             [89450 , 22],
+             [190750, 24],
+             [364200, 32],
+             [462500, 35],
+             [693750, 37]]
+stded = 27700            # standard deduction
+
+
 # this section convers the working before retirement starts
 [prep]
 workyears = 10      # we retire at startage + 10

@@ -2,7 +2,10 @@
 
 import argparse
 import re
-import toml
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 import scipy.optimize
 
 # Required Minimal Distributions from IRA starting with age 70
@@ -34,7 +37,7 @@ def agelist(str):
 class Data:
     def load_file(self, file):
         with open(file) as conffile:
-            d = toml.loads(conffile.read())
+            d = tomllib.loads(conffile.read())
         self.i_rate = 1 + d.get('inflation', 0) / 100       # inflation rate: 2.5 -> 1.025
         self.r_rate = 1 + d.get('returns', 6) / 100         # invest rate: 6 -> 1.06
 
@@ -43,15 +46,18 @@ class Data:
 
         # 2023 tax table (could predict it moves with inflation?)
         # married joint at the moment, can override in config file
-        self.taxrates = d.get('taxrates',
-                              [[0,      0.00],
-                               [0.1,    0.10], # fake level to fix 0
-                               [22000,  0.12],
-                               [89450 , 0.22],
-                               [190750, 0.24],
-                               [364200, 0.32],
-                               [462500, 0.35],
-                               [693750, 0.37]])
+        tmp_taxrates = d.get('taxrates',
+                              [[0,      10],
+                               [22000,  12],
+                               [89450 , 22],
+                               [190750, 24],
+                               [364200, 32],
+                               [462500, 35],
+                               [693750, 37]])
+        # add fake level and swith to decimals
+        tmp_taxrates[:0] = [[0, 0]]
+        self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
+
         self.stded = d.get('stded', 27700)
 
         self.state_tax = d.get('state_tax', 0)
@@ -386,16 +392,18 @@ def print_ascii(res):
         #if S.income[year]:
         #    savings += S.income[year]
 
+        (c, r, b) = (0, 0, 0)
         if inc < 0:
             inc = 0
-        (taxbase, last_cut, last_rate) = (0, 0, 0)
+
+        (taxbase, last_cut, last_rate) = (b, c, r)
         for (cut, rate) in S.taxrates:
             rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             cut *= i_mul
-            if inc < cut:
+            if inc <= cut:
                 break
             c = cut
             r = rate

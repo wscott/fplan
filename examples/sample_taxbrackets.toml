@@ -2,18 +2,14 @@
 startage = 55
 endage = 100		# stops at 99
 
-# As seen here the starting levels of the tax brackets may need to contain 
-# decimal points.  This appears to be related to the version of the TOML library
-# on your system.
-
 # This tax bracket is for single filers in 2024
-taxrates = [[0.00,      0.10],
-            [11600.00,  0.12],
-            [47150.00,  0.22],
-            [100526.00, 0.24],
-            [191950.00, 0.32],
-            [243725.00, 0.35],
-            [609350.00, 0.37]]
+taxrates = [[0,      10],
+            [11600,  12],
+            [47150,  22],
+            [100526, 24],
+            [191950, 32],
+            [243725, 35],
+            [609350, 37]]
 stded = 14600            # standard deduction
 
 state_tax = 0.05
