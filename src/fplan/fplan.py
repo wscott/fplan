@@ -2,7 +2,10 @@
 
 import argparse
 import re
-import toml
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 import scipy.optimize
 
 # Required Minimal Distributions from IRA starting with age 70
@@ -34,7 +37,7 @@ def agelist(str):
 class Data:
     def load_file(self, file):
         with open(file) as conffile:
-            d = toml.loads(conffile.read())
+            d = tomllib.loads(conffile.read())
         self.i_rate = 1 + d.get('inflation', 0) / 100       # inflation rate: 2.5 -> 1.025
         self.r_rate = 1 + d.get('returns', 6) / 100         # invest rate: 6 -> 1.06
 
