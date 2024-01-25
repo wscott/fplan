@@ -183,7 +183,8 @@ def solve(args):
 
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in S.taxrates:
-            rate += S.state_tax
+            if rate > 0:                             # if below fed std_ded, assumes tax 0%
+                rate += S.state_tax 
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
