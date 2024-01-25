@@ -54,9 +54,14 @@ class Data:
                                [693750, 0.37]])
         self.stded = d.get('stded', 27700)
 
-        self.state_tax = d.get('state_tax', 0)
-        self.state_cg_tax = d.get('state_cg_tax', self.state_tax)
-        self.state_ded = d.get('state_ded', 0)
+        if 'taxes' in d:
+            self.state_tax = d['taxes'].get('state_rate', 0)
+            self.state_cg_tax = d['taxes'].get('state_cg_rate', self.state_tax)
+            self.state_tax = self.state_tax / 100.0
+            self.state_cg_tax = self.state_cg_tax / 100.0
+        else:
+            self.state_tax = 0
+            self.state_cg_tax = 0
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']

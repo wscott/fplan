@@ -16,10 +16,13 @@ taxrates = [[0.00,      0.10],
             [609350.00, 0.37]]
 stded = 14600            # standard deduction
 
-state_tax = 0.05
-
 returns = 8		# return rate of investments
 inflation = 2.1		# yearly inflation rate
+
+[taxes]
+state_rate = 4
+state_cg_rate = 0       # if you don't specify the state cap-gains tax rate
+                        # it will default to the state_rate
 
 # this section convers the working before retirement starts
 [prep]
