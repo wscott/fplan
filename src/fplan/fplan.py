@@ -66,10 +66,6 @@ class Data:
         self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
         self.state_tax = self.state_tax / 100.0
         self.state_cg_tax = self.state_cg_tax / 100.0
-        print(self.stded)
-        print(self.taxrates)
-        print(self.state_tax)
-        print(self.state_cg_tax)
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
