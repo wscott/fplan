@@ -16,6 +16,7 @@ endage = 100		# stops at 99
 [prep]
 workyears = 10      # we retire at startage + 10
 maxsave = 60000     # and save up $60k/yr (pre-tax)
+inflation = false   # should the maxsave increase with inflation, default: true
 tax_rate = 25       # in 25% bracket while working
 
 
@@ -40,7 +41,7 @@ basis = 115000		# for capital gains tax
 # pre-tax IRA accounts
 [IRA]
 bal = 420000
-maxcontrib = 18000
+maxcontrib = 18000  # it is assumed the IRS will increase this with inflation
 
 # roth IRA accounts
 # in the future this will include the ability to separate contributions
@@ -49,7 +50,7 @@ maxcontrib = 18000
 # because the author just did a rollover. ;-)
 [roth]
 bal = 50000
-maxcontrib = 11000
+maxcontrib = 11000  # it is assumed the IRS will increase this with inflation
 
 # record when contributions were made to this account.
 # before age 59 this is used to know when previous contributions can be
