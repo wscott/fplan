@@ -12,6 +12,11 @@ inflation = 2.1		# yearly inflation rate
 startage = 55
 endage = 100		# stops at 99
 
+[taxes]
+state_rate = 3
+state_cg_rate = 0       # if you don't specify the state cap-gains tax rate
+                        # then it will default to the state_rate
+
 # this section convers the working before retirement starts
 [prep]
 workyears = 10      # we retire at startage + 10

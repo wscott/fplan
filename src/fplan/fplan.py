@@ -54,8 +54,14 @@ class Data:
                                [693750, 0.37]])
         self.stded = d.get('stded', 27700)
 
-        self.state_tax = d.get('state_tax', 0)
-        self.state_ded = d.get('state_ded', 0)
+        if 'taxes' in d:
+            self.state_tax = d['taxes'].get('state_rate', 0)
+            self.state_cg_tax = d['taxes'].get('state_cg_rate', self.state_tax)
+            self.state_tax = self.state_tax / 100.0
+            self.state_cg_tax = self.state_cg_tax / 100.0
+        else:
+            self.state_tax = 0
+            self.state_cg_tax = 0
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
@@ -195,7 +201,7 @@ def solve(args):
                 row[1] = (-1 + rate) * (1/S.sepp_ratio) # income from SEPP amount
             cut *= i_mul
             # aftertax withdrawal + capital gains tax
-            row[n0+vper*year+0] = -1 + basis * cg_tax
+            row[n0+vper*year+0] = -1 + basis * (cg_tax + S.state_cg_tax)
 
             if year + S.retireage < 59:
                 row[n0+vper*year+1] = -0.9 + rate    # 10% penelty
@@ -413,7 +419,7 @@ def print_ascii(res):
                          (S.aftertax['bal']*S.r_rate**year))
         else:
             basis = 1
-        tax += fsavings * basis * cg_tax
+        tax += fsavings * basis * (cg_tax + S.state_cg_tax)
         if S.retireage + year < 59:
             tax += fira * 0.10
         ttax += tax
