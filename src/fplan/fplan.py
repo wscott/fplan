@@ -43,28 +43,33 @@ class Data:
 
         # 2023 tax table (could predict it moves with inflation?)
         # married joint at the moment, can override in config file
-        tmp_taxrates = d.get('taxrates',
-                              [[0,      10],
-                               [22000,  12],
-                               [89450 , 22],
-                               [190750, 24],
-                               [364200, 32],
-                               [462500, 35],
-                               [693750, 37]])
-        # add fake level and swith to decimals
-        tmp_taxrates[:0] = [[0, 0]]
-        self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
-
-        self.stded = d.get('stded', 27700)
-
+        default_taxrates = [[0,      10], 
+                            [22000,  12],
+                            [89450 , 22],
+                            [190750, 24],
+                            [364200, 32],
+                            [462500, 35],
+                            [693750, 37]]
+        default_stded = 27700
+        tmp_taxrates = default_taxrates
         if 'taxes' in d:
+            tmp_taxrates = d['taxes'].get('taxrates', default_taxrates)
+            self.stded = d['taxes'].get('stded', default_stded)
             self.state_tax = d['taxes'].get('state_rate', 0)
             self.state_cg_tax = d['taxes'].get('state_cg_rate', self.state_tax)
-            self.state_tax = self.state_tax / 100.0
-            self.state_cg_tax = self.state_cg_tax / 100.0
         else:
+            self.stded = default_stded
             self.state_tax = 0
             self.state_cg_tax = 0
+        # add fake level and switch to decimals
+        tmp_taxrates[:0] = [[0, 0]]
+        self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
+        self.state_tax = self.state_tax / 100.0
+        self.state_cg_tax = self.state_cg_tax / 100.0
+        print(self.stded)
+        print(self.taxrates)
+        print(self.state_tax)
+        print(self.state_cg_tax)
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
