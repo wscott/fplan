@@ -17,8 +17,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "toml",
-    "scipy"
+    'tomli; python_version < "3.11"',
+    'scipy'
 ]
 
 [project.scripts]
