@@ -12,10 +12,23 @@ inflation = 2.1		# yearly inflation rate
 startage = 55
 endage = 100		# stops at 99
 
+
 [taxes]
 state_rate = 3
 state_cg_rate = 0       # if you don't specify the state cap-gains tax rate
                         # then it will default to the state_rate
+
+# The default tax rates in fplan are for MFJ in 2023.  
+# For Single filers in 2023, uncomment the taxrates and stded lines below.
+#taxrates = [[0,      10],
+#            [11000,  12],
+#            [44725,  22],
+#            [95375,  24],
+#            [182100, 32],
+#            [231250, 35],
+#            [578125, 37]]
+#stded = 13850            # standard deduction
+
 
 # this section convers the working before retirement starts
 [prep]

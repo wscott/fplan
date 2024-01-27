@@ -46,25 +46,29 @@ class Data:
 
         # 2023 tax table (could predict it moves with inflation?)
         # married joint at the moment, can override in config file
-        self.taxrates = d.get('taxrates',
-                              [[0,      0.00],
-                               [0.1,    0.10], # fake level to fix 0
-                               [22000,  0.12],
-                               [89450 , 0.22],
-                               [190750, 0.24],
-                               [364200, 0.32],
-                               [462500, 0.35],
-                               [693750, 0.37]])
-        self.stded = d.get('stded', 27700)
-
+        default_taxrates = [[0,      10], 
+                            [22000,  12],
+                            [89450 , 22],
+                            [190750, 24],
+                            [364200, 32],
+                            [462500, 35],
+                            [693750, 37]]
+        default_stded = 27700
+        tmp_taxrates = default_taxrates
         if 'taxes' in d:
+            tmp_taxrates = d['taxes'].get('taxrates', default_taxrates)
+            self.stded = d['taxes'].get('stded', default_stded)
             self.state_tax = d['taxes'].get('state_rate', 0)
             self.state_cg_tax = d['taxes'].get('state_cg_rate', self.state_tax)
-            self.state_tax = self.state_tax / 100.0
-            self.state_cg_tax = self.state_cg_tax / 100.0
         else:
+            self.stded = default_stded
             self.state_tax = 0
             self.state_cg_tax = 0
+        # add fake level and switch to decimals
+        tmp_taxrates[:0] = [[0, 0]]
+        self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
+        self.state_tax = self.state_tax / 100.0
+        self.state_cg_tax = self.state_cg_tax / 100.0
 
         if 'prep' in d:
             self.workyr = d['prep']['workyears']
@@ -193,7 +197,8 @@ def solve(args):
 
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in S.taxrates:
-            rate += S.state_tax
+            if rate > 0:                             # if below fed std_ded, assumes tax 0%
+                rate += S.state_tax 
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
@@ -399,16 +404,18 @@ def print_ascii(res):
         #if S.income[year]:
         #    savings += S.income[year]
 
+        (c, r, b) = (0, 0, 0)
         if inc < 0:
             inc = 0
-        (taxbase, last_cut, last_rate) = (0, 0, 0)
+
+        (taxbase, last_cut, last_rate) = (b, c, r)
         for (cut, rate) in S.taxrates:
             rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
             cut *= i_mul
-            if inc < cut:
+            if inc <= cut:
                 break
             c = cut
             r = rate
