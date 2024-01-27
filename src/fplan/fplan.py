@@ -410,7 +410,8 @@ def print_ascii(res):
 
         (taxbase, last_cut, last_rate) = (b, c, r)
         for (cut, rate) in S.taxrates:
-            rate += S.state_tax
+            if rate > 0:
+                rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
