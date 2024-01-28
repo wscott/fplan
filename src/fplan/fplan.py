@@ -34,6 +34,15 @@ def agelist(str):
         else:
             raise Exception("Bad age " + str)
 
+def subtable(data, table, keys):
+    tmp = data.pop(table, {})
+    ret = {}
+    for k,defval in keys.items():
+        ret[k] = tmp.pop(k, defval)
+    for k,v in tmp.items():
+        print("unknown config {}.{} = {}".format(table, k, v))
+    return ret
+
 class Data:
     def load_file(self, file):
         with open(file) as conffile:
@@ -54,66 +63,46 @@ class Data:
                                 [364200, 32],
                                 [462500, 35],
                                 [693750, 37]]
-            default_stded = 27700
-            tmp_taxrates = default_taxrates
-            taxes = d.pop('taxes', {})
-            tmp_taxrates = taxes.pop('taxrates', default_taxrates)
-            self.stded = taxes.pop('stded', default_stded)
-            self.state_tax = taxes.pop('state_rate', 0)
-            self.state_cg_tax = taxes.pop('state_cg_rate', self.state_tax)
-            for k,v in taxes.items():
-                print("unknown config taxes.{} = {}".format(k, v))
-
+            taxes = subtable(d, 'taxes',
+                             { 'taxrates': default_taxrates,
+                               'stded': 27700,
+                               'state_rate': 0,
+                               'state_cg_rate': -1,
+                              })
+            self.stded = taxes['stded']
+            tmp_taxrates = taxes['taxrates']
             # add fake level and switch to decimals
             tmp_taxrates[:0] = [[0, 0]]
             self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
-            self.state_tax = self.state_tax / 100.0
-            self.state_cg_tax = self.state_cg_tax / 100.0
+            self.stded = taxes['stded']
+            self.state_tax = taxes['state_rate'] / 100.0
+            self.state_cg_tax = taxes['state_cg_rate'] / 100.0
+            if self.state_cg_tax == -1:
+                self.state_cg_tax = self.state_tax
 
-            prep = d.pop('prep', {})
-            self.workyr = prep.pop('workyears', 0)
-            self.maxsave = prep.pop('maxsave', 0)
-            self.maxsave_inflation = prep.pop('inflation', True)
-            self.worktax = 1 + prep.pop('tax_rate', 25)/100
-            for k,v in prep.items():
-                print("unknown config prep.{} = {}".format(k, v))
+            prep = subtable(d, 'prep',
+                            { 'workyears': 0,
+                              'maxsave': 0,
+                              'inflation': True,
+                              'tax_rate': 25 })
+            self.workyr = prep['workyears']
+            self.maxsave = prep['maxsave']
+            self.maxsave_inflation = prep['inflation']
+            self.worktax = 1 + prep['tax_rate'] / 100.0
 
             self.retireage = self.startage + self.workyr
             self.numyr = self.endage - self.retireage
 
-            self.aftertax = {}
-            tmp = d.pop('aftertax', {'bal': 0})
-            try:
-                self.aftertax['bal'] = tmp.pop('bal')
-                self.aftertax['basis'] = tmp.pop('basis', 0)
-            except KeyError as bad:
-                print("missing key {} in aftertax = {}".format(bad, tmp))
-            else:
-                for k,v in tmp.items():
-                    print("unknown config aftertax.{} = {}".format(k, v))
-
-            self.IRA = {}
-            tmp = d.pop('IRA', {'bal': 0})
-            try:
-                self.IRA['bal'] = tmp.pop('bal')
-                self.IRA['maxcontrib'] = tmp.pop('maxcontrib', 19500 + 7000*2)
-            except KeyError as bad:
-                print("missing key {} in IRA = {}".format(bad, tmp))
-            else:
-                for k,v in tmp.items():
-                    print("unknown config IRA.{} = {}".format(k, v))
-
-            self.roth = {}
-            tmp = d.pop('roth', {'bal': 0})
-            try:
-                self.roth['bal'] = tmp.pop('bal')
-                self.roth['maxcontrib'] = tmp.pop('maxcontrib', 7000*2)
-                self.roth['contributions'] = tmp.pop('contributions', [])
-            except KeyError as bad:
-                print("missing key {} in roth = {}".format(bad, tmp))
-            else:
-                for k,v in tmp.items():
-                    print("unknown config roth.{} = {}".format(k, v))
+            self.aftertax = subtable(d, 'aftertax',
+                                     { 'bal': 0,
+                                       'basis': 0 })
+            self.IRA = subtable(d, 'IRA',
+                                { 'bal': 0,
+                                  'maxcontrib': 19500 + 7000*2 })
+            self.roth = subtable(d, 'roth',
+                                 { 'bal': 0,
+                                   'maxcontrib': 7000*2,
+                                   'contributions': []})
 
             self.parse_expenses(d)
             self.sepp_end = max(5, 59-self.retireage)  # first year you can spend IRA reserved for SEPP
