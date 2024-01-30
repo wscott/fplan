@@ -201,6 +201,14 @@ def solve(args):
     #   GOAL + EXTRA >= SAVING + IRA + ROTH + SS - TAX
     for year in range(S.numyr):
         i_mul = S.i_rate ** (year + S.workyr)
+        n_fsave = n0+vper*year+0
+        n_fira = n0+vper*year+1
+        n_froth = n0+vper*year+2
+        n_ira2roth = n0+vper*year+3
+        n_stded = n0+vper*year+4
+        n_taxtable = n0+vper*year+5
+        n_state = n0+vper*year+5 + len(S.taxtable)
+        n_taxes = n0+vper*year+vper-1
 
         # aftertax basis
         # XXX fix work contributions
@@ -213,61 +221,61 @@ def solve(args):
 
         # limit how much can be considered part of the standard deduction
         row = [0] * nvars
-        row[n0+vper*year+4] = 1
+        row[n_stded] = 1
         A += [row]
         b += [S.stded * i_mul]
 
         for idx, (rate, low, high) in enumerate(S.taxtable[0:-1]):
             # limit how much can be put in each tax bracket
             row = [0] * nvars
-            row[n0+vper*year+5+idx] = 1
+            row[n_taxtable+idx] = 1
             A += [row]
             b += [(high - low) * i_mul]
 
         # the sum of everything in the std deduction + tax brackets must 
         # be equal to fira + ira2roth + taxed_extra
         row = [0] * nvars
-        row[n0+vper*year+1] = 1
-        row[n0+vper*year+3] = 1
-        row[n0+vper*year+4] = -1
+        row[n_fira] = 1
+        row[n_ira2roth] = 1
+        row[n_stded] = -1
         for idx in range(len(S.taxtable)):
-            row[n0+vper*year+5+idx] = -1
+            row[n_taxtable+idx] = -1
         AE += [row]
         be += [-S.taxed[year]]
        
         # the sum of everything in the std deduction + state tax brackets must 
         # be equal to fira + ira2roth + taxed_extra
         row = [0] * nvars
-        row[n0+vper*year+1] = 1
-        row[n0+vper*year+3] = 1
-        row[n0+vper*year+4] = -1
-        row[n0+vper*year+5+len(S.taxtable)] = -1
+        row[n_fira] = 1
+        row[n_ira2roth] = 1
+        row[n_stded] = -1
+        row[n_state] = -1
         AE += [row]
         be += [-S.taxed[year]]
 
         # calc total taxes
         row = [0] * nvars
-        row[n0+vper*year+vper-1] = 1        # this is where we will store total taxes
+        row[n_taxes] = 1                    # this is where we will store total taxes
         if year + S.retireage < 59:         # ira penalty
-            row[n0+vper*year+1] = -0.1
-        row[n0+vper*year+0] = -basis * (cg_tax + S.state_cg_tax)
-        row[n0+vper*year+2] = -0
-        row[n0+vper*year+4] = -0
+            row[n_fira] = -0.1
+        row[n_fsave] = -basis * (cg_tax + S.state_cg_tax)
+        row[n_froth] = -0
+        row[n_stded] = -0
         for idx, (rate, low, high) in enumerate(S.taxtable):
-            row[n0+vper*year+5+idx] = -rate
-        row[n0+vper*year+5+len(S.taxtable)] = -S.state_tax
+            row[n_taxtable+idx] = -rate
+        row[n_state] = -S.state_tax
         AE += [row]
         be += [0]
 
         # calc that everything withdrawn must equal spending money + total taxes
         row = [0] * nvars
         # spendable money
-        row[n0+vper*year+0] = 1
-        row[n0+vper*year+1] = 1
-        row[n0+vper*year+2] = 1
+        row[n_fsave] = 1
+        row[n_fira] = 1
+        row[n_froth] = 1
         # spent money
         row[0] -= i_mul                     # spending floor
-        row[n0+vper*year+vper-1] = -1       # taxes as computed earlier
+        row[n_taxes] = -1                   # taxes as computed earlier
         AE += [row]
         be += [-S.income[year] + S.expenses[year]]
        
@@ -425,7 +433,7 @@ def print_ascii(res):
         roth *= S.r_rate
 
     print((" age" + " %5s" * 12) %
-          ("save", "spend", "IRA", "fIRA", "SEPP", "Roth", "fRoth", "IRA2R",
+          ("save", "fsave", "IRA", "fIRA", "SEPP", "Roth", "fRoth", "IRA2R",
            "rate", "tax", "spend", "extra"))
     ttax = 0.0
     tspend = 0.0
@@ -508,7 +516,7 @@ def print_csv(res):
     print("ira,%d" % S.IRA['bal'])
     print("roth,%d" % S.roth['bal'])
 
-    print("age,spend,fIRA,fROTH,IRA2R,income,expense")
+    print("age,fsave,fIRA,fROTH,IRA2R,income,expense")
     for year in range(S.numyr):
         fsavings = res[n0+year*vper]
         fira = res[n0+year*vper+1]
