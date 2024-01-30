@@ -1,0 +1,77 @@
+# This an example input file
+
+# The format of this file will likely change in the future as
+# the program changes in the future.
+
+# most fields are options and have resonable defaults
+
+returns = 8		# return rate of investments
+inflation = 2.1		# yearly inflation rate
+
+# age range to simulate
+startage = 55
+endage = 100		# stops at 99
+
+
+[taxes]
+state_rate = 3
+state_cg_rate = 0       # if you don't specify the state cap-gains tax rate
+                        # then it will default to the state_rate
+
+# The default tax rates in fplan are for MFJ in 2023.  
+# For Single filers in 2023, uncomment the taxrates and stded lines below.
+#taxrates = [[0,      10],
+#            [11000,  12],
+#            [44725,  22],
+#            [95375,  24],
+#            [182100, 32],
+#            [231250, 35],
+#            [578125, 37]]
+#stded = 13850            # standard deduction
+
+
+# this section convers the working before retirement starts
+[prep]
+workyears = 10      # we retire at startage + 10
+maxsave = 60000     # and save up $60k/yr (pre-tax)
+inflation = false   # should the maxsave increase with inflation, default: true
+tax_rate = 25       # in 25% bracket while working
+
+
+# assume Social Security will start paying $35k/yr at age 70
+# the SS payout is scaled by inflation
+[income.social_sec]
+amount = 35000
+age = "70-"
+inflation = true
+tax = true                      # count this as income tax
+
+# extra payments required (here mortgage at $750/mo for 12 years)
+[expense.mortgage]
+amount = 9000
+age = "55-67"
+
+# after tax savings accounts
+[aftertax]
+bal = 212000
+basis = 115000		# for capital gains tax
+
+# pre-tax IRA accounts
+[IRA]
+bal = 420000
+maxcontrib = 18000  # it is assumed the IRS will increase this with inflation
+
+# roth IRA accounts
+# in the future this will include the ability to separate contributions
+# from the account value and include the dates of the recent contributions.
+# Right now it is all a single contribution at the start of file plan
+# because the author just did a rollover. ;-)
+[roth]
+bal = 50000
+maxcontrib = 11000  # it is assumed the IRS will increase this with inflation
+
+# record when contributions were made to this account.
+# before age 59 this is used to know when previous contributions can be
+# made. Include IRA->Roth conversions in this list.
+contributions = [[54, 20000],
+                 [55, 20000]]
