@@ -211,6 +211,7 @@ def solve(args):
         else:
             basis = 1
 
+
         # limit how much can be considered part of the standard deduction
         row = [0] * nvars
         row[n0+vper*year+4] = 1
@@ -472,7 +473,7 @@ def print_ascii(res):
         # aftertax basis
         if S.aftertax['basis'] > 0:
             basis = 1 - (S.aftertax['basis'] /
-                         (S.aftertax['bal']*S.r_rate**year))
+                         (S.aftertax['bal']*S.r_rate**(year+S.workyr)))
         else:
             basis = 1
         tax += fsavings * basis * (cg_tax + S.state_cg_tax)
