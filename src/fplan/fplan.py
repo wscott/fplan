@@ -437,7 +437,6 @@ def print_ascii(res):
            "rate", "tax", "spend", "extra"))
     ttax = 0.0
     tspend = 0.0
-    tdiff_tax = 0.0
     for year in range(S.numyr):
         i_mul = S.i_rate ** (year + S.workyr)
         fsavings = res[n0+year*vper]
@@ -450,53 +449,23 @@ def print_ascii(res):
             sepp_spend = 0
         inc = fira + ira2roth - S.stded*i_mul + S.taxed[year] + sepp_spend
 
+        tax = res[n0+year*vper+vper-1]
+        rate = next(r for (r, l, h) in S.taxtable if (inc <= h*i_mul)) + S.state_tax
+
         #if S.income[year]:
         #    savings += S.income[year]
 
-        (c, r, b) = (0, 0, 0)
-        if inc < 0:
-            inc = 0
-
-        (taxbase, last_cut, last_rate) = (b, c, r)
-        for (cut, rate) in S.taxrates:
-            if rate > 0:
-                rate += S.state_tax
-            taxbase += (cut - last_cut) * last_rate * i_mul
-            (last_cut, last_rate) = (cut, rate)
-            base = taxbase
-            cut *= i_mul
-            if inc <= cut:
-                break
-            c = cut
-            r = rate
-            b = base
-        (cut, rate, base) = (c, r, b)
-        tax = (inc - cut) * rate + base
-
-        # aftertax basis
-        if S.aftertax['basis'] > 0:
-            basis = 1 - (S.aftertax['basis'] /
-                         (S.aftertax['bal']*S.r_rate**(year+S.workyr)))
-        else:
-            basis = 1
-        tax += fsavings * basis * (cg_tax + S.state_cg_tax)
-        if S.retireage + year < 59:
-            tax += fira * 0.10
-        ttax += tax
         extra = S.expenses[year] - S.income[year]
         spending = fsavings + fira + froth - tax - extra + sepp_spend
 
-        tspend += spending + extra
-        computed_tax = res[n0+year*vper+vper-1]
-        diff_tax = tax - computed_tax
-        tdiff_tax += diff_tax
-        print((" %d:" + " %5.0f" * 14) %
+        ttax += tax / i_mul                     # totals in today's dollars
+        tspend += (spending + extra) / i_mul    # totals in today's dollars
+        print((" %d:" + " %5.0f" * 12) %
               (year+S.retireage,
                savings/1000, fsavings/1000,
                ira/1000, fira/1000, sepp_spend/1000,
                roth/1000, froth/1000, ira2roth/1000,
-               rate * 100, tax/1000, spending/1000, extra/1000, 
-               computed_tax/1000, diff_tax))
+               rate * 100, tax/1000, spending/1000, extra/1000))
 
         savings -= fsavings
         savings *= S.r_rate
@@ -507,8 +476,8 @@ def print_ascii(res):
         roth *= S.r_rate
 
     print("\ntotal spending: %.0f" % tspend)
-    print("total tax: %.0f (%.1f%%)" % (ttax, 100*ttax/tspend))
-    print("diff taxes debug: %f" % (tdiff_tax))
+    print("total tax: %.0f (%.1f%%)" % (ttax, 100*ttax/(tspend+ttax)))
+
 
 def print_csv(res):
     print("spend goal,%d" % res[0])
