@@ -71,7 +71,6 @@ class Data:
         self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
         cutoffs = [x[0] for x in self.taxrates][1:] + [float('inf')]
         self.taxtable = list(map(lambda x, y: [x[1], x[0], y], self.taxrates, cutoffs))
-#        print(self.taxtable)
 
         self.state_tax = self.state_tax / 100.0
         self.state_cg_tax = self.state_cg_tax / 100.0
@@ -221,7 +220,6 @@ def solve(args):
         for idx, (rate, low, high) in enumerate(S.taxtable[0:-1]):
             # limit how much can be put in each tax bracket
             row = [0] * nvars
-            row[0] * nvars
             row[n0+vper*year+5+idx] = 1
             A += [row]
             b += [(high - low) * i_mul]
@@ -397,9 +395,6 @@ def solve(args):
         print(res)
         exit(1)
 
-#    for i in range(vper):
-#        print(res.x[n0+i], end="\t")
-#    print()
     return res.x
 
 def print_ascii(res):
