@@ -427,7 +427,7 @@ def print_ascii(res):
         # aftertax basis
         if S.aftertax['basis'] > 0:
             basis = 1 - (S.aftertax['basis'] /
-                         (S.aftertax['bal']*S.r_rate**year))
+                         (S.aftertax['bal']*S.r_rate**(year + S.workyr)))
         else:
             basis = 1
         tax += fsavings * basis * (cg_tax + S.state_cg_tax)
