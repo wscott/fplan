@@ -1,0 +1,17 @@
+returns = 0
+inflation = 0
+startage = 30
+endage = 80
+
+[taxes]
+taxrates = [[0, 20]]
+stded = 100_000            # standard deduction
+cg_tax = 0 # doesn't work
+
+[aftertax]
+bal = 500_000
+basis = 500_000
+
+[roth]
+bal = 9_000_000
+contributions = [[30, 9_000_000]]
