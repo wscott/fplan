@@ -5,19 +5,20 @@ def test_load_file1():
     # test using examples/sample.toml config file
     #   TODO: determine if we want to test against the examples.
     #       Pro - ensures they work
-    #       Con - doubles work when changing examples and tests too
+    #       Con - doubles work when changing examples
+    #   For now, leave it in here.  We can delete the test if we decide against this path.
     config_data = Data()
     config_data.load_file('examples/sample.toml')
-    _check_config_contents(config_data)
+    _check_sample_config_contents(config_data)
 
 
 def test_load_file2():
     # test using local config file
     config_data = Data()
-    config_data.load_file('test/fplan/test_load_file/test1.toml')
-    _check_config_contents(config_data)
+    config_data.load_file('test/fplan/test_load_file/sample.toml')
+    _check_sample_config_contents(config_data)
 
-def _check_config_contents(cfg: Data) -> None:
+def _check_sample_config_contents(cfg: Data) -> None:
     assert cfg.i_rate == 1.021  # questionable floating point comparison
     assert cfg.r_rate == 1.08
 
