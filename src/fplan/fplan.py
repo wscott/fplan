@@ -34,69 +34,85 @@ def agelist(str):
         else:
             raise Exception("Bad age " + str)
 
+def subtable(data, table, keys):
+    tmp = data.pop(table, {})
+    ret = {}
+    for k,defval in keys.items():
+        ret[k] = tmp.pop(k, defval)
+    for k,v in tmp.items():
+        print("unknown config {}.{} = {}".format(table, k, v))
+    return ret
+
 class Data:
     def load_file(self, file):
         with open(file) as conffile:
             d = tomllib.loads(conffile.read())
-        self.i_rate = 1 + d.get('inflation', 0) / 100       # inflation rate: 2.5 -> 1.025
-        self.r_rate = 1 + d.get('returns', 6) / 100         # invest rate: 6 -> 1.06
+        try:
+            self.i_rate = 1 + d.pop('inflation', 0) / 100       # inflation rate: 2.5 -> 1.025
+            self.r_rate = 1 + d.pop('returns', 6) / 100         # invest rate: 6 -> 1.06
 
-        self.startage = d['startage']
-        self.endage = d.get('endage', max(96, self.startage+5))
+            self.startage = d.pop('startage')
+            self.endage = d.pop('endage', max(96, self.startage+5))
 
-        # 2023 tax table (could predict it moves with inflation?)
-        # married joint at the moment, can override in config file
-        default_taxrates = [[0,      10], 
-                            [22000,  12],
-                            [89450 , 22],
-                            [190750, 24],
-                            [364200, 32],
-                            [462500, 35],
-                            [693750, 37]]
-        default_stded = 27700
-        tmp_taxrates = default_taxrates
-        if 'taxes' in d:
-            tmp_taxrates = d['taxes'].get('taxrates', default_taxrates)
-            self.stded = d['taxes'].get('stded', default_stded)
-            self.state_tax = d['taxes'].get('state_rate', 0)
-            self.state_cg_tax = d['taxes'].get('state_cg_rate', self.state_tax)
-        else:
-            self.stded = default_stded
-            self.state_tax = 0
-            self.state_cg_tax = 0
-        # add fake level and switch to decimals
-        tmp_taxrates[:0] = [[0, 0]]
-        self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
-        self.state_tax = self.state_tax / 100.0
-        self.state_cg_tax = self.state_cg_tax / 100.0
+            # 2023 tax table (could predict it moves with inflation?)
+            # married joint at the moment, can override in config file
+            default_taxrates = [[0,      10],
+                                [22000,  12],
+                                [89450 , 22],
+                                [190750, 24],
+                                [364200, 32],
+                                [462500, 35],
+                                [693750, 37]]
+            taxes = subtable(d, 'taxes',
+                             { 'taxrates': default_taxrates,
+                               'stded': 27700,
+                               'state_rate': 0,
+                               'state_cg_rate': -1,
+                              })
+            self.stded = taxes['stded']
+            tmp_taxrates = taxes['taxrates']
+            # add fake level and switch to decimals
+            tmp_taxrates[:0] = [[0, 0]]
+            self.taxrates = [[x,y/100.0] for (x,y) in tmp_taxrates]
+            self.stded = taxes['stded']
+            self.state_tax = taxes['state_rate'] / 100.0
+            self.state_cg_tax = taxes['state_cg_rate'] / 100.0
+            if self.state_cg_tax == -1:
+                self.state_cg_tax = self.state_tax
 
-        if 'prep' in d:
-            self.workyr = d['prep']['workyears']
-            self.maxsave = d['prep']['maxsave']
-            self.maxsave_inflation = d['prep'].get('inflation', True)
-            self.worktax = 1 + d['prep'].get('tax_rate', 25)/100
-        else:
-            self.workyr = 0
-        self.retireage = self.startage + self.workyr
-        self.numyr = self.endage - self.retireage
+            prep = subtable(d, 'prep',
+                            { 'workyears': 0,
+                              'maxsave': 0,
+                              'inflation': True,
+                              'tax_rate': 25 })
+            self.workyr = prep['workyears']
+            self.maxsave = prep['maxsave']
+            self.maxsave_inflation = prep['inflation']
+            self.worktax = 1 + prep['tax_rate'] / 100.0
 
-        self.aftertax = d.get('aftertax', {'bal': 0})
-        if 'basis' not in self.aftertax:
-            self.aftertax['basis'] = 0
+            self.retireage = self.startage + self.workyr
+            self.numyr = self.endage - self.retireage
 
-        self.IRA = d.get('IRA', {'bal': 0})
-        if 'maxcontrib' not in self.IRA:
-            self.IRA['maxcontrib'] = 19500 + 7000*2
+            self.aftertax = subtable(d, 'aftertax',
+                                     { 'bal': 0,
+                                       'basis': 0 })
+            self.IRA = subtable(d, 'IRA',
+                                { 'bal': 0,
+                                  'maxcontrib': 19500 + 7000*2 })
+            self.roth = subtable(d, 'roth',
+                                 { 'bal': 0,
+                                   'maxcontrib': 7000*2,
+                                   'contributions': []})
 
-        self.roth = d.get('roth', {'bal': 0})
-        if 'maxcontrib' not in self.roth:
-            self.roth['maxcontrib'] = 7000*2
-        if 'contributions' not in self.roth:
-            self.roth['contributions'] = []
+            self.parse_expenses(d)
+            self.sepp_end = max(5, 59-self.retireage)  # first year you can spend IRA reserved for SEPP
+            self.sepp_ratio = 25                       # money per-year from SEPP  (bal/ratio)
+        except KeyError as bad:
+            print("missing {} in config file".format(bad))
+            raise
 
-        self.parse_expenses(d)
-        self.sepp_end = max(5, 59-self.retireage)  # first year you can spend IRA reserved for SEPP
-        self.sepp_ratio = 25                       # money per-year from SEPP  (bal/ratio)
+        for k,v in d.items():
+            print("unknown config {} = {}".format(k, v))
 
     def parse_expenses(self, S):
         """ Return array of income/expense per year """
@@ -104,40 +120,59 @@ class Data:
         EXP = [0] * self.numyr
         TAX = [0] * self.numyr
 
-        for k,v in S.get('expense', {}).items():
-            for age in agelist(v['age']):
-                year = age - self.retireage
-                if year < 0:
-                    continue
-                elif year >= self.numyr:
-                    break
-                else:
-                    amount = v['amount']
-                    if v.get('inflation'):
-                        amount *= self.i_rate ** (year + self.workyr)
-                    EXP[year] += amount
+        for k,v in S.pop('expense', {}).items():
+            try:
+                amount = v.pop('amount')
+                inflation = v.pop('inflation', False)
 
-        for k,v in S.get('income', {}).items():
-            for age in agelist(v['age']):
-                year = age - self.retireage
-                if year < 0:
-                    continue
-                elif year >= self.numyr:
-                    break
-                else:
-                    amount = v['amount']
-                    if v.get('inflation'):
-                        amount *= self.i_rate ** (year + self.workyr)
-                    INC[year] += amount
-                    if v.get('tax'):
-                        TAX[year] += amount
+                for age in agelist(v.pop('age')):
+                    year = age - self.retireage
+                    if year < 0:
+                        continue
+                    elif year >= self.numyr:
+                        break
+                    else:
+                        val = amount
+                        if inflation:
+                            val *= self.i_rate ** (year + self.workyr)
+                        EXP[year] += val
+            except KeyError as bad:
+                print("Missing key {} from expense.{}".format(bad, k))
+            else:
+                for k2,v2 in v.items():
+                    print("unknown config expense.{}.{} = {}".format(k, k2, v2))
+
+        for k,v in S.pop('income', {}).items():
+            try:
+                amount = v.pop('amount')
+                inflation = v.pop('inflation', False)
+                tax = v.pop('tax', False)
+
+                for age in agelist(v.pop('age')):
+                    year = age - self.retireage
+                    if year < 0:
+                        continue
+                    elif year >= self.numyr:
+                        break
+                    else:
+                        val = amount
+                        if inflation:
+                            val *= self.i_rate ** (year + self.workyr)
+                        INC[year] += val
+                        if tax:
+                            TAX[year] += val;
+            except KeyError as bad:
+                print("Missing key {} from income.{}".format(bad, k))
+            else:
+                for k2,v2 in v.items():
+                    print("unknown config income.{}.{} = {}".format(k, k2, v2))
         self.income = INC
         self.expenses = EXP
         self.taxed = TAX
 
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
-#vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
+#vars: money, sepp, per year(savings, ira, roth, ira2roth)
 #all vars positive
 def solve(args):
     # optimize this poly (we want to maximize the money we can spend)
@@ -198,7 +233,7 @@ def solve(args):
         (taxbase, last_cut, last_rate) = (0, 0, 0)
         for (cut, rate) in S.taxrates:
             if rate > 0:                             # if below fed std_ded, assumes tax 0%
-                rate += S.state_tax 
+                rate += S.state_tax
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
@@ -221,7 +256,7 @@ def solve(args):
             row[n0+vper*year+2] = -1                 # Roth
 
             row[n0+vper*year+3] = rate + 0.0001       # tax on Roth conversion
-                                                      # + 0.0001 hack so that conversions 
+                                                      # + 0.0001 hack so that conversions
                                                       # look slightly inferior to withdrawals
             A += [row]
 
