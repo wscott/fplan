@@ -8,12 +8,13 @@ except ModuleNotFoundError:
     import tomli as tomllib
 import scipy.optimize
 
-# Required Minimal Distributions from IRA starting with age 70
-RMD = [27.4, 26.5, 25.6, 24.7, 23.8, 22.9, 22.0, 21.2, 20.3, 19.5,  # age 70-79
-       18.7, 17.9, 17.1, 16.3, 15.5, 14.8, 14.1, 13.4, 12.7, 12.0,  # age 80-89
-       11.4, 10.8, 10.2,  9.6,  9.1,  8.6,  8.1,  7.6,  7.1,  6.7,  # age 90-99
-        6.3,  5.9,  5.5,  5.2,  4.9,  4.5,  4.2,  3.9,  3.7,  3.4,  # age 100+
-        3.1,  2.9,  2.6,  2.4,  2.1,  1.9,  1.9,  1.9,  1.9,  1.9]
+# Required Minimal Distributions from IRA starting with age 73
+# last updated for 2024
+RMD = [27.4, 26.5, 25.5, 24.6, 23.7, 22.9, 22.0, 21.1, 20.2, 19.4,  # age 72-81
+       18.5, 17.7, 16.8, 16.0, 15.3, 14.5, 13.7, 12.9, 12.2, 11.5,  # age 82-91
+       10.8, 10.1,  9.5,  8.9,  8.4,  7.8,  7.3,  6.8,  6.4,  6.0,  # age 92-101
+        5.6,  5.2,  4.9,  4.6,  4.3,  4.1,  3.9,  3.7,  3.5,  3.4,  # age 102+
+        3.3,  3.1,  3.0,  2.9,  2.8,  2.7,  2.5,  2.3,  2.0,  2.0]
 
 cg_tax = 0.15                   # capital gains tax rate
 
@@ -322,10 +323,10 @@ def solve(args):
         b += [S.roth['bal'] * S.r_rate ** (S.workyr + year)]
 
     # starting with age 70 the user must take RMD payments
-    for year in range(max(0,70-S.retireage),S.numyr):
+    for year in range(max(0,73-S.retireage),S.numyr):
         row = [0] * nvars
         age = year + S.retireage
-        rmd = RMD[age - 70]
+        rmd = RMD[age - 72]
 
         # the gains from the initial balance minus any withdraws gives
         # the current balance.
