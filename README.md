@@ -75,5 +75,12 @@ in table are in 1000s of dollars.
 
 This tools has been somewhat on the back burner for a couple years.
 That said, I am more than happy to help people to use it and
-understand the resuls. Send mail at Wayne <wsc9tt@gmail.com> or
+understand the results. Send mail at Wayne <wsc9tt@gmail.com> or
 file issues on github.
+
+## Developer Information
+
+### Testing
+
+The `test` directory contains test scripts to exercise the various subsystems.
+Run `python -m pytest` to launch all of the tests.
