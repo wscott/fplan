@@ -1,3 +1,5 @@
+import math
+
 from src.fplan.fplan import Data
 
 
@@ -18,16 +20,17 @@ def test_load_file2():
     config_data.load_file('test/fplan/test_load_file/sample.toml')
     _check_sample_config_contents(config_data)
 
+
 def _check_sample_config_contents(cfg: Data) -> None:
-    assert cfg.i_rate == 1.021  # questionable floating point comparison
-    assert cfg.r_rate == 1.08
+    assert math.isclose(cfg.i_rate, 1.021)
+    assert math.isclose(cfg.r_rate, 1.08)
 
     assert cfg.startage == 55
     assert cfg.endage == 100
 
     assert cfg.stded == 27700
-    assert cfg.state_tax == 3 / 100.0
-    assert cfg.state_cg_tax == 0 / 100.0
+    assert math.isclose(cfg.state_tax, 3 / 100.0)
+    assert math.isclose(cfg.state_cg_tax, 0 / 100.0)
     assert cfg.taxrates == [[0, 0],
                             [0, 10/100.0],
                             [22000, 12/100.0],
@@ -39,25 +42,32 @@ def _check_sample_config_contents(cfg: Data) -> None:
 
     assert cfg.workyr == 10
     assert cfg.maxsave == 60000
-    assert cfg.maxsave_inflation == False
-    assert cfg.worktax == 1.25
+    assert cfg.maxsave_inflation is False
+    assert math.isclose(cfg.worktax, 1.25)
     assert cfg.retireage == 65
     assert cfg.numyr == 35
 
-    assert cfg.aftertax['bal'] == 212000
-    assert cfg.aftertax['basis'] == 115000
+    assert _isclose_dol(cfg.aftertax['bal'], 212000)
+    assert _isclose_dol(cfg.aftertax['basis'], 115000)
 
-    assert cfg.IRA['bal'] == 420000
-    assert cfg.IRA['maxcontrib'] == 18000
+    assert _isclose_dol(cfg.IRA['bal'], 420000)
+    assert _isclose_dol(cfg.IRA['maxcontrib'], 18000)
 
-    assert cfg.roth['bal'] == 50000
-    assert cfg.roth['maxcontrib'] == 11000
-    assert cfg.roth['contributions'] == [[54, 20000], [55, 20000]]
+    assert _isclose_dol(cfg.roth['bal'], 50000)
+    assert _isclose_dol(cfg.roth['maxcontrib'], 11000)
+    assert all(_isclose_dol(x, y) for x, y in zip(cfg.roth['contributions'][0], [54, 20000]))
+    assert all(_isclose_dol(x, y) for x, y in zip(cfg.roth['contributions'][1], [55, 20000]))
 
-    # TODO Determine if this is fragile on other python versions.  FP compares like this give me the willies.
-    assert cfg.income == [0, 0, 0, 0, 0, 47802.892452600514, 48806.75319410512, 49831.69501118133, 50878.16060641613, 51946.60197915086, 53037.480620713024, 54151.26771374799, 55288.4443357367, 56449.50166678716, 57634.94120178968, 58845.27496702727, 60081.02574133483, 61342.72728190286, 62630.924554822814, 63946.17397047408, 65289.043623854035, 66660.11353995497, 68059.975924294, 69489.23541870418, 70948.50936249696, 72438.42805910938, 73959.63504835068, 75512.78738436603, 77098.55591943773, 78717.6255937459, 80370.69573121457, 82058.48034157006, 83781.70842874303, 85541.1243057466, 87337.48791616729]
-    assert cfg.expenses == [9000, 9000, 9000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    assert cfg.taxed == [0, 0, 0, 0, 0, 47802.892452600514, 48806.75319410512, 49831.69501118133, 50878.16060641613, 51946.60197915086, 53037.480620713024, 54151.26771374799, 55288.4443357367, 56449.50166678716, 57634.94120178968, 58845.27496702727, 60081.02574133483, 61342.72728190286, 62630.924554822814, 63946.17397047408, 65289.043623854035, 66660.11353995497, 68059.975924294, 69489.23541870418, 70948.50936249696, 72438.42805910938, 73959.63504835068, 75512.78738436603, 77098.55591943773, 78717.6255937459, 80370.69573121457, 82058.48034157006, 83781.70842874303, 85541.1243057466, 87337.48791616729]
+    expected_inc_tax = [0, 0, 0, 0, 0, 47802.89, 48806.76, 49831.70, 50878.16, 51946.60, 53037.48, 54151.27, 55288.44, 56449.50, 57634.94, 58845.27, 60081.03, 61342.73, 62630.92, 63946.17, 65289.04, 66660.11, 68059.98, 69489.24, 70948.51, 72438.43, 73959.64, 75512.79, 77098.56, 78717.63, 80370.70, 82058.48, 83781.71, 85541.12, 87337.49]
+    expected_expenses = [9000, 9000, 9000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    assert all(_isclose_dol(x, y) for x, y in zip(cfg.income, expected_inc_tax))
+    assert all(_isclose_dol(x, y) for x, y in zip(cfg.expenses, expected_expenses))
+    assert all(_isclose_dol(x, y) for x, y in zip(cfg.taxed, expected_inc_tax))
 
     assert cfg.sepp_end == 5
     assert cfg.sepp_ratio == 25
+
+
+def _isclose_dol(x: float, y: float) -> bool:
+    """Test for dollar values within $0.01"""
+    return math.isclose(x, y, abs_tol=0.01)
