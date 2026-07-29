@@ -1,6 +1,7 @@
 #!/usr/bin/env uv run
 
 import argparse
+import enum
 import re
 import sys
 import tomllib
@@ -198,37 +199,75 @@ class Data:
         self.taxed = TAX
 
 
+# The scipy.optimize.linprog "x" vector is one flat list of numbers, made up
+# of a fixed-size block of variables (`Field`) repeated for each work-year
+# and each retirement-year, plus two scalars (GOAL, SEPP) at the front. The
+# constants/`Vars` helper below let the rest of `solve()` refer to columns
+# by name (e.g. `V.retire(year, Field.IRA)`) instead of hand-computing
+# `n0 + vper * year + 1` everywhere.
+GOAL = 0  # this year's (scaled) spend target - the value linprog maximizes
+SEPP = 1  # total 72(t) SEPP amount taken from the IRA
+
+
+class Field(enum.IntEnum):
+    """Named offsets within each work/retirement year's block of variables."""
+
+    SAVINGS = 0  # after-tax savings withdrawal
+    IRA = 1  # IRA withdrawal (or, in a work year, IRA contribution)
+    ROTH = 2  # Roth withdrawal (or, in a work year, Roth contribution)
+    IRA2ROTH = 3  # IRA -> Roth conversion
+    DEPOSIT = 4  # bank part of this (retirement) year's income for later
+
+
+class Vars:
+    """Maps named per-year variables to columns in the flat `linprog` vector."""
+
+    def __init__(self, S: Data):
+        self.S = S
+        self.nvars = S.n1 + S.vper * (S.numyr + S.workyr)
+
+    def work(self, year: int, field: Field) -> int:
+        """Column for `field` in a pre-retirement (working) year."""
+        return self.S.n1 + year * self.S.vper + field
+
+    def retire(self, year: int, field: Field) -> int:
+        """Column for `field` in a post-retirement year."""
+        return self.S.n0 + year * self.S.vper + field
+
+    def row(self) -> list[float]:
+        """A fresh, all-zero constraint/objective row."""
+        return [0.0] * self.nvars
+
+
 # Minimize: c^T * x
 # Subject to: A_ub * x <= b_ub
 # vars: money, per year(savings, ira, roth, ira2roth)  (193 vars)
 # all vars positive
 def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
     # optimize this poly (we want to maximize the money we can spend)
-    vper = S.vper
-    n1 = S.n1
-    n0 = S.n0
+    V = Vars(S)
+    nvars = V.nvars
 
-    nvars = n1 + vper * (S.numyr + S.workyr)
-    c = [0] * nvars
-    c[0] = -1
+    c = V.row()
+    c[GOAL] = -1
 
     A = []
     b = []
 
     if not sepp:
         # force SEPP to zero
-        row = [0] * nvars
-        row[1] = 1
+        row = V.row()
+        row[SEPP] = 1
         A += [row]
         b += [0]
 
     # Work contributions don't exceed limits
     for year in range(S.workyr):
         # can't exceed maxsave per year
-        row = [0] * nvars
-        row[n1 + year * vper + 0] = S.worktax
-        row[n1 + year * vper + 1] = 1
-        row[n1 + year * vper + 2] = S.worktax
+        row = V.row()
+        row[V.work(year, Field.SAVINGS)] = S.worktax
+        row[V.work(year, Field.IRA)] = 1
+        row[V.work(year, Field.ROTH)] = S.worktax
         A += [row]
         if S.maxsave_inflation:
             b += [S.maxsave * S.i_rate**year]
@@ -236,14 +275,14 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
             b += [S.maxsave]
 
         # max IRA per year
-        row = [0] * nvars
-        row[n1 + year * vper + 1] = 1
+        row = V.row()
+        row[V.work(year, Field.IRA)] = 1
         A += [row]
         b += [S.IRA["maxcontrib"] * S.i_rate**year]
 
         # max Roth per year
-        row = [0] * nvars
-        row[n1 + year * vper + 2] = 1
+        row = V.row()
+        row[V.work(year, Field.ROTH)] = 1
         A += [row]
         b += [S.roth["maxcontrib"] * S.i_rate**year]
 
@@ -271,31 +310,31 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
             taxbase += (cut - last_cut) * last_rate * i_mul
             (last_cut, last_rate) = (cut, rate)
             base = taxbase
-            row = [0] * nvars
-            row[0] = i_mul  # goal is positive
+            row = V.row()
+            row[GOAL] = i_mul  # goal is positive
 
             if year < S.sepp_end:
-                row[1] = (-1 + rate) * (1 / S.sepp_ratio)  # income from SEPP amount
+                row[SEPP] = (-1 + rate) * (1 / S.sepp_ratio)  # income from SEPP amount
             cut *= i_mul
             # aftertax withdrawal + capital gains tax
-            row[n0 + vper * year + 0] = -1 + basis * (cg_tax + S.state_cg_tax)
+            row[V.retire(year, Field.SAVINGS)] = -1 + basis * (cg_tax + S.state_cg_tax)
 
             if year + S.retireage < 59:
-                row[n0 + vper * year + 1] = -0.9 + rate  # 10% penelty
+                row[V.retire(year, Field.IRA)] = -0.9 + rate  # 10% penelty
             else:
-                row[n0 + vper * year + 1] = -1 + rate  # IRA - tax
+                row[V.retire(year, Field.IRA)] = -1 + rate  # IRA - tax
 
             # XXX How to model 10% penelty for Roth before 59 other than
             # contributions
-            row[n0 + vper * year + 2] = -1  # Roth
+            row[V.retire(year, Field.ROTH)] = -1  # Roth
 
-            row[n0 + vper * year + 3] = rate + 0.0001  # tax on Roth conversion
+            row[V.retire(year, Field.IRA2ROTH)] = rate + 0.0001  # tax on conversion
             # + 0.0001 hack so that conversions
             # look slightly inferior to withdrawals
 
             # depositing (banking) part of this year's income for later use
             # consumes spendable cash the same way spending it would
-            row[n0 + vper * year + 4] = 1  # deposit into savings
+            row[V.retire(year, Field.DEPOSIT)] = 1
 
             A += [row]
 
@@ -310,49 +349,49 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
     # end), otherwise depositing surplus income (see the bounds below)
     # could let the solver spend against a balance that doesn't exist yet
     for year in range(S.numyr):
-        row = [0] * nvars
+        row = V.row()
         for y in range(year + 1):
-            row[n0 + vper * y + 0] = S.r_rate ** (year + 1 - y)
-            row[n0 + vper * y + 4] = -(S.r_rate ** (year + 1 - y))
+            row[V.retire(y, Field.SAVINGS)] = S.r_rate ** (year + 1 - y)
+            row[V.retire(y, Field.DEPOSIT)] = -(S.r_rate ** (year + 1 - y))
         for y in range(S.workyr):
-            row[n1 + vper * y + 0] = -(S.r_rate ** (S.workyr + year + 1 - y))
+            row[V.work(y, Field.SAVINGS)] = -(S.r_rate ** (S.workyr + year + 1 - y))
         A += [row]
         b += [S.aftertax["bal"] * S.r_rate ** (S.workyr + year + 1)]
 
     # final balance for IRA needs to be positive
-    row = [0] * nvars
+    row = V.row()
     for year in range(S.numyr):
-        row[n0 + vper * year + 1] = S.r_rate ** (S.numyr - year)
-        row[n0 + vper * year + 3] = S.r_rate ** (S.numyr - year)
+        row[V.retire(year, Field.IRA)] = S.r_rate ** (S.numyr - year)
+        row[V.retire(year, Field.IRA2ROTH)] = S.r_rate ** (S.numyr - year)
         if year < S.sepp_end:
-            row[1] += (1 / S.sepp_ratio) * S.r_rate ** (S.numyr - year)
+            row[SEPP] += (1 / S.sepp_ratio) * S.r_rate ** (S.numyr - year)
     for year in range(S.workyr):
-        row[n1 + vper * year + 1] = -(S.r_rate ** (S.numyr + S.workyr - year))
+        row[V.work(year, Field.IRA)] = -(S.r_rate ** (S.numyr + S.workyr - year))
     A += [row]
     b += [S.IRA["bal"] * S.r_rate ** (S.workyr + S.numyr)]
 
     # IRA balance at SEPP end needs to not touch SEPP money
-    row = [0] * nvars
+    row = V.row()
     for year in range(S.sepp_end):
-        row[n0 + vper * year + 1] = S.r_rate ** (S.sepp_end - year)
-        row[n0 + vper * year + 3] = S.r_rate ** (S.sepp_end - year)
+        row[V.retire(year, Field.IRA)] = S.r_rate ** (S.sepp_end - year)
+        row[V.retire(year, Field.IRA2ROTH)] = S.r_rate ** (S.sepp_end - year)
     for year in range(S.workyr):
-        row[n1 + vper * year + 1] = -(S.r_rate ** (S.sepp_end + S.workyr - year))
-    row[1] = S.r_rate**S.sepp_end
+        row[V.work(year, Field.IRA)] = -(S.r_rate ** (S.sepp_end + S.workyr - year))
+    row[SEPP] = S.r_rate**S.sepp_end
     A += [row]
     b += [S.IRA["bal"] * S.r_rate**S.sepp_end]
 
     # before 59, Roth can only spend from contributions
     for year in range(min(S.numyr, 59 - S.retireage)):
-        row = [0] * nvars
+        row = V.row()
         for y in range(year - 4):
-            row[n0 + vper * y + 3] = -1
+            row[V.retire(y, Field.IRA2ROTH)] = -1
         for y in range(year + 1):
-            row[n0 + vper * y + 2] = 1
+            row[V.retire(y, Field.ROTH)] = 1
 
         # include contributions while working
         for y in range(min(S.workyr, S.workyr - 4 + year)):
-            row[n1 + vper * y + 2] = -1
+            row[V.work(y, Field.ROTH)] = -1
 
         A += [row]
         # only see initial balance after it has aged
@@ -365,20 +404,20 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
     # after 59 all of Roth can be spent, but contributions need to age
     # 5 years and the balance each year needs to be positive
     for year in range(max(0, 59 - S.retireage), S.numyr + 1):
-        row = [0] * nvars
+        row = V.row()
 
         # remove previous withdrawls
         for y in range(year):
-            row[n0 + vper * y + 2] = S.r_rate ** (year - y)
+            row[V.retire(y, Field.ROTH)] = S.r_rate ** (year - y)
 
         # add previous conversions, but we can only see things
         # converted more than 5 years ago
         for y in range(year - 5):
-            row[n0 + vper * y + 3] = -(S.r_rate ** (year - y))
+            row[V.retire(y, Field.IRA2ROTH)] = -(S.r_rate ** (year - y))
 
         # add contributions from work period
         for y in range(S.workyr):
-            row[n1 + vper * y + 2] = -(S.r_rate ** (S.workyr + year - y))
+            row[V.work(y, Field.ROTH)] = -(S.r_rate ** (S.workyr + year - y))
 
         A += [row]
         # initial balance
@@ -386,40 +425,41 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
 
     # starting with age 70 the user must take RMD payments
     for year in range(max(0, 73 - S.retireage), S.numyr):
-        row = [0] * nvars
+        row = V.row()
         age = year + S.retireage
         rmd = RMD[age - 72]
 
         # the gains from the initial balance minus any withdraws gives
         # the current balance.
         for y in range(year):
-            row[n0 + vper * y + 1] = -(S.r_rate ** (year - y))
-            row[n0 + vper * y + 3] = -(S.r_rate ** (year - y))
+            row[V.retire(y, Field.IRA)] = -(S.r_rate ** (year - y))
+            row[V.retire(y, Field.IRA2ROTH)] = -(S.r_rate ** (year - y))
             if year < S.sepp_end:
-                row[1] -= (1 / S.sepp_ratio) * S.r_rate ** (year - y)
+                row[SEPP] -= (1 / S.sepp_ratio) * S.r_rate ** (year - y)
 
         # include deposits during work years
         for y in range(S.workyr):
-            row[n1 + vper * y + 1] = S.r_rate ** (S.workyr + year - y)
+            row[V.work(y, Field.IRA)] = S.r_rate ** (S.workyr + year - y)
 
         # this year's withdraw times the RMD factor needs to be more than
         # the balance
-        row[n0 + vper * year + 1] = -rmd
+        row[V.retire(year, Field.IRA)] = -rmd
 
         A += [row]
         b += [-(S.IRA["bal"] * S.r_rate ** (S.workyr + year))]
 
-    # All variables are non-negative by default. The "deposit" slot (index
-    # +4) of each retirement year's block lets that year's surplus income
-    # (e.g. proceeds from selling a house) be banked into savings instead
-    # of being forced to spend it all, so it can be withdrawn (and taxed
-    # normally as a capital gain) in a later year. It is capped at that
-    # year's income so it can't be used as an unbacked source of money,
-    # and it is a separate variable (rather than a negative withdrawal) so
-    # depositing money never generates a negative capital-gains tax.
+    # All variables are non-negative by default. The "deposit" slot
+    # (Field.DEPOSIT) of each retirement year's block lets that year's
+    # surplus income (e.g. proceeds from selling a house) be banked into
+    # savings instead of being forced to spend it all, so it can be
+    # withdrawn (and taxed normally as a capital gain) in a later year. It
+    # is capped at that year's income so it can't be used as an unbacked
+    # source of money, and it is a separate variable (rather than a
+    # negative withdrawal) so depositing money never generates a negative
+    # capital-gains tax.
     bounds = [(0, None)] * nvars
     for year in range(S.numyr):
-        bounds[n0 + vper * year + 4] = (0, max(0, S.income[year]))
+        bounds[V.retire(year, Field.DEPOSIT)] = (0, max(0, S.income[year]))
 
     if verbose:
         print("Num vars: ", len(c))
@@ -435,19 +475,20 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
 
 
 def print_ascii(S: Data, res: list[float]) -> None:
-    print("Yearly spending <= ", 100 * int(res[0] / 100))
-    sepp = 100 * int(res[1] / 100)
+    print("Yearly spending <= ", 100 * int(res[GOAL] / 100))
+    sepp = 100 * int(res[SEPP] / 100)
     print("SEPP amount = ", sepp, sepp / S.sepp_ratio)
     print()
+    V = Vars(S)
     savings = S.aftertax["bal"]
     ira = S.IRA["bal"]
     roth = S.roth["bal"]
     if S.workyr > 0:
         print((" age" + " %5s" * 6) % ("save", "tSAVE", "IRA", "tIRA", "Roth", "tRoth"))
     for year in range(S.workyr):
-        fsavings = res[S.n1 + year * S.vper]
-        fira = res[S.n1 + year * S.vper + 1]
-        froth = res[S.n1 + year * S.vper + 2]
+        fsavings = res[V.work(year, Field.SAVINGS)]
+        fira = res[V.work(year, Field.IRA)]
+        froth = res[V.work(year, Field.ROTH)]
         print(
             (" %d:" + " %5.0f" * 6)
             % (
@@ -488,11 +529,11 @@ def print_ascii(S: Data, res: list[float]) -> None:
     tspend = 0.0
     for year in range(S.numyr):
         i_mul = S.i_rate ** (year + S.workyr)
-        fsavings = res[S.n0 + year * S.vper]
-        fira = res[S.n0 + year * S.vper + 1]
-        froth = res[S.n0 + year * S.vper + 2]
-        ira2roth = res[S.n0 + year * S.vper + 3]
-        deposit = res[S.n0 + year * S.vper + 4]
+        fsavings = res[V.retire(year, Field.SAVINGS)]
+        fira = res[V.retire(year, Field.IRA)]
+        froth = res[V.retire(year, Field.ROTH)]
+        ira2roth = res[V.retire(year, Field.IRA2ROTH)]
+        deposit = res[V.retire(year, Field.DEPOSIT)]
         if year < S.sepp_end:
             sepp_spend = sepp / S.sepp_ratio
         else:
@@ -570,18 +611,19 @@ def print_ascii(S: Data, res: list[float]) -> None:
 
 
 def print_csv(S: Data, res: list[float]) -> None:
-    print(f"spend goal,{res[0]:.0f}")
+    print(f"spend goal,{res[GOAL]:.0f}")
     print(f"savings,{S.aftertax['bal']:.0f},{S.aftertax['basis']:.0f}")
     print(f"ira,{S.IRA['bal']:.0f}")
     print(f"roth,{S.roth['bal']:.0f}")
 
     print("age,spend,fIRA,fROTH,IRA2R,income,expense,deposit")
+    V = Vars(S)
     for year in range(S.numyr):
-        fsavings = res[S.n0 + year * S.vper]
-        fira = res[S.n0 + year * S.vper + 1]
-        froth = res[S.n0 + year * S.vper + 2]
-        ira2roth = res[S.n0 + year * S.vper + 3]
-        deposit = res[S.n0 + year * S.vper + 4]
+        fsavings = res[V.retire(year, Field.SAVINGS)]
+        fira = res[V.retire(year, Field.IRA)]
+        froth = res[V.retire(year, Field.ROTH)]
+        ira2roth = res[V.retire(year, Field.IRA2ROTH)]
+        deposit = res[V.retire(year, Field.DEPOSIT)]
         print(
             ("%d," * 7 + "%d")
             % (

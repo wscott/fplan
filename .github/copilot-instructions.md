@@ -48,20 +48,25 @@ The whole program is one file with three phases:
      year, a fixed-size block (`vper` variables per year) of unknowns:
      savings withdrawal, IRA withdrawal, Roth withdrawal, IRA→Roth
      conversion, and (retirement years only) a deposit-into-savings
-     amount. `n0`/`n1`/`vper` are the offsets/stride into this vector —
-     read them together with the comments in `solve()` before changing
-     the variable layout, since every constraint row indexes into it by
-     hand (`row[n0 + vper * year + k] = ...`).
+     amount, plus two scalars (`GOAL`, `SEPP`) at the front. Columns are
+     named rather than hand-indexed: `Field` is an `IntEnum`
+     (`SAVINGS`/`IRA`/`ROTH`/`IRA2ROTH`/`DEPOSIT`) giving the offset
+     within a year's block, and `Vars(S)` exposes `V.work(year, Field.X)`
+     / `V.retire(year, Field.X)` to get the column number for a
+     work-year/retirement-year variable, and `V.row()` for a fresh
+     zeroed constraint row — use these instead of reintroducing raw
+     `n0 + vper * year + k` arithmetic when adding constraints.
    - Constraints (`A`, `b` rows) encode contribution limits, tax-bracket
      piecewise-linearization (one row per bracket per year, since linprog
      needs linear constraints for a progressive tax table), capital-gains
      basis erosion, RMDs (`RMD` table), the 59½ penalty, and optional SEPP
      72(t) withdrawals.
    - `c` is the objective (maximize the "goal" spend variable, i.e.
-     `c[0] = -1` since linprog minimizes).
-   - Variables default to `(0, None)` bounds. The "deposit" slot (index
-     +4) of each retirement year's block lets that year's surplus income
-     (e.g. a one-time house sale) be banked into savings instead of being
+     `c[GOAL] = -1` since linprog minimizes).
+   - Variables default to `(0, None)` bounds. The "deposit" slot
+     (`Field.DEPOSIT`) of each retirement year's block lets that year's
+     surplus income (e.g. a one-time house sale) be banked into savings
+     instead of being
      forced to spend it all, so it can be withdrawn (and taxed normally
      as a capital gain, via the withdrawal slot) in a later year. It is
      capped at `(0, income[year])` so it can't be used as an unbacked
