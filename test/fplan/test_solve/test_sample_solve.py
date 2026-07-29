@@ -1,6 +1,6 @@
 import math
 
-from src.fplan.fplan import Data, solve
+from fplan import Data, solve
 
 
 def test_sample_solve() -> None:
@@ -24,12 +24,16 @@ def test_flat_solve() -> None:
     assert _isclose(res[0], expected_spend, tolerance)
 
     for k in range(5):  # Spend from savings first 5 years
-        assert _isclose(res[2 + k * 4 + 0], expected_spend, tolerance)
-        assert _isclose(res[2 + k * 4 + 2], 0.0, tolerance)
+        assert _isclose(
+            res[config_data.n0 + k * config_data.vper + 0], expected_spend, tolerance
+        )
+        assert _isclose(res[config_data.n0 + k * config_data.vper + 2], 0.0, tolerance)
 
     for k in range(5, 50):  # Spend from roth remaining 45 years
-        assert _isclose(res[2 + k * 4 + 0], 0.0, tolerance)
-        assert _isclose(res[2 + k * 4 + 2], expected_spend, tolerance)
+        assert _isclose(res[config_data.n0 + k * config_data.vper + 0], 0.0, tolerance)
+        assert _isclose(
+            res[config_data.n0 + k * config_data.vper + 2], expected_spend, tolerance
+        )
 
 
 def _isclose(x: float, y: float, abs_tol=100) -> bool:

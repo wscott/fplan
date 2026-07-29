@@ -3,4 +3,12 @@
 
 .venv/
 
-scott.toml
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage

@@ -2,7 +2,9 @@
 
 import argparse
 import re
+import sys
 import tomllib
+
 import scipy.optimize
 
 # Required Minimal Distributions from IRA starting with age 73
@@ -63,6 +65,10 @@ RMD = [
 cg_tax = 0.15  # capital gains tax rate
 
 
+class AgeRangeError(Exception):
+    """Raised when an age/age-range string in a config file can't be parsed."""
+
+
 def agelist(str):
     for x in str.split(","):
         m = re.match(r"^(\d+)(-(\d+)?)?$", x)
@@ -75,10 +81,9 @@ def agelist(str):
                     e = int(e)
                 else:
                     e = 120
-            for a in range(s, e + 1):
-                yield a
+            yield from range(s, e + 1)
         else:
-            raise Exception("Bad age " + str)
+            raise AgeRangeError("Bad age " + str)
 
 
 class Data:
@@ -161,7 +166,7 @@ class Data:
         EXP = [0] * self.numyr
         TAX = [0] * self.numyr
 
-        for k, v in S.get("expense", {}).items():
+        for v in S.get("expense", {}).values():
             for age in agelist(v["age"]):
                 year = age - self.retireage
                 if year < 0:
@@ -174,7 +179,7 @@ class Data:
                         amount *= self.i_rate ** (year + self.workyr)
                     EXP[year] += amount
 
-        for k, v in S.get("income", {}).items():
+        for v in S.get("income", {}).values():
             for age in agelist(v["age"]):
                 year = age - self.retireage
                 if year < 0:
@@ -340,7 +345,7 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
     # before 59, Roth can only spend from contributions
     for year in range(min(S.numyr, 59 - S.retireage)):
         row = [0] * nvars
-        for y in range(0, year - 4):
+        for y in range(year - 4):
             row[n0 + vper * y + 3] = -1
         for y in range(year + 1):
             row[n0 + vper * y + 2] = 1
@@ -424,7 +429,7 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
     )
     if not res.success:
         print(res)
-        exit(1)
+        sys.exit(1)
 
     return res.x
 
@@ -498,8 +503,7 @@ def print_ascii(S: Data, res: list[float]) -> None:
         #    savings += S.income[year]
 
         (c, r, b) = (0, 0, 0)
-        if inc < 0:
-            inc = 0
+        inc = max(inc, 0)
 
         (taxbase, last_cut, last_rate) = (b, c, r)
         for cut, rate in S.taxrates:
@@ -561,15 +565,15 @@ def print_ascii(S: Data, res: list[float]) -> None:
         roth += ira2roth
         roth *= S.r_rate
 
-    print("\ntotal spending: %.0f" % tspend)
-    print("total tax: %.0f (%.1f%%)" % (ttax, 100 * ttax / tspend))
+    print(f"\ntotal spending: {tspend:.0f}")
+    print(f"total tax: {ttax:.0f} ({100 * ttax / tspend:.1f}%)")
 
 
 def print_csv(S: Data, res: list[float]) -> None:
-    print("spend goal,%d" % res[0])
-    print("savings,%d,%d" % (S.aftertax["bal"], S.aftertax["basis"]))
-    print("ira,%d" % S.IRA["bal"])
-    print("roth,%d" % S.roth["bal"])
+    print(f"spend goal,{res[0]:.0f}")
+    print(f"savings,{S.aftertax['bal']:.0f},{S.aftertax['basis']:.0f}")
+    print(f"ira,{S.IRA['bal']:.0f}")
+    print(f"roth,{S.roth['bal']:.0f}")
 
     print("age,spend,fIRA,fROTH,IRA2R,income,expense,deposit")
     for year in range(S.numyr):

@@ -81,4 +81,8 @@ file issues on github.
 ### Testing
 
 The `test` directory contains test scripts to exercise the various subsystems.
-Run `python -m pytest` to launch all of the tests.
+Run `uv run pytest` to launch all of the tests.
+
+### Linting and formatting
+
+Run `uv run ruff check .` and `uv run ruff format .`.

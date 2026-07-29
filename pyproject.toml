@@ -1,5 +1,6 @@
-[tool]
-uv.package = true
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fplan"
@@ -22,3 +23,27 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/wscott/fplan"
 Issues = "https://github.com/wscott/fplan/issues"
+
+[project.scripts]
+fplan = "fplan:main"
+
+[tool.setuptools]
+py-modules = ["fplan"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.16",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+
+[tool.ruff]
+target-version = "py311"

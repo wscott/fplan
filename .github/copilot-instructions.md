@@ -8,32 +8,30 @@ spend (and, as a side effect, minimizes taxes).
 ## Running
 
 ```sh
-uv run src/fplan.py examples/sample.toml
+uv run src/fplan.py examples/sample.toml   # run the module directly
+uv run fplan examples/sample.toml          # equivalent, via the installed console script
 ```
 
-`uv run fplan` (the console-script entry point) does **not** currently work
-because `pyproject.toml` has no `[project.scripts]` entry — always invoke
-`src/fplan.py` directly. Config files are TOML; see `examples/sample.toml`
-for the format. Real per-person plans (e.g. `scott.toml`, `nathan.toml`) live
-at the repo root for the maintainer's personal use — don't treat them as
-examples to edit.
+Config files are TOML; see `examples/sample.toml` for the format. Real
+per-person plans (e.g. `scott.toml`, `nathan.toml`) live at the repo root for
+the maintainer's personal use — don't treat them as examples to edit.
 
 ## Testing and linting
 
-Neither `pytest` nor `ruff` are project dependencies, so run them with `uvx`:
+`pytest` and `ruff` are dev dependencies (see `[dependency-groups]` in
+`pyproject.toml`), so `uv run` picks them up automatically:
 
 ```sh
-uvx --with-editable . pytest -q                       # full suite
-uvx --with-editable . pytest test/fplan/test_solve/test_sample_solve.py::test_flat_solve  # single test
-uvx ruff check src/fplan.py
-uvx ruff format src/fplan.py
+uv run pytest -q                                                          # full suite
+uv run pytest test/fplan/test_solve/test_sample_solve.py::test_flat_solve # single test
+uv run ruff check .
+uv run ruff format .
 ```
 
-**Known issue:** the tests under `test/fplan/` import `from src.fplan.fplan
-import ...` (a `src/fplan/fplan.py` package layout), but the actual source
-lives at `src/fplan.py`. This mismatch currently breaks test collection on
-`master` — it's a pre-existing issue, not something introduced by your
-change, so don't feel obligated to fix it unless that's the task at hand.
+The `test/` tree imports the project as `from fplan import ...` — this
+works because `pyproject.toml` declares `fplan` as a single top-level
+module (`py-modules = ["fplan"]` under `[tool.setuptools]`, sourced from
+`src/fplan.py`) and `uv run`/`uv sync` install it editable automatically.
 
 ## Architecture (`src/fplan.py`, single-file program)
 

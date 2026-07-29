@@ -1,6 +1,6 @@
 import math
 
-from src.fplan.fplan import Data
+from fplan import Data
 
 
 def test_load_file1():
