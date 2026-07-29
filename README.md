@@ -43,10 +43,8 @@ before age 59.5.
 
 ## Installing
 
-This program is written in Python and can be installed locally with
-`pip install --user .`.
-
-I am new to Python packaging so hints to make this easier for people are appreciated
+This program is written in Python and can run locally with
+`uv run fplan`.  
 
 ## Usage
 

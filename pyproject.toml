@@ -1,6 +1,5 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool]
+uv.package = true
 
 [project]
 name = "fplan"
@@ -10,19 +9,15 @@ authors = [
 ]
 description = "Early retirement financial calculator"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    'tomli; python_version < "3.11"',
     'scipy'
 ]
-
-[project.scripts]
-fplan = "fplan:main"
 
 [project.urls]
 Homepage = "https://github.com/wscott/fplan"

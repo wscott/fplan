@@ -1,5 +1,6 @@
 *~
+\#*
+
+.venv/
+
 scott.toml
-dist
-.idea/
-__pycache__/
