@@ -82,7 +82,7 @@ def agelist(str):
 
 
 class Data:
-    vper: int = 4  # variables per year (savings, ira, roth, ira2roth)
+    vper: int = 5  # variables per year (savings, ira, roth, ira2roth, deposit)
     n1: int = 2  # before-retire years start here
     n0: int  # post-retirement years start here
 
@@ -287,38 +287,32 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
             row[n0 + vper * year + 3] = rate + 0.0001  # tax on Roth conversion
             # + 0.0001 hack so that conversions
             # look slightly inferior to withdrawals
+
+            # depositing (banking) part of this year's income for later use
+            # consumes spendable cash the same way spending it would
+            row[n0 + vper * year + 4] = 1  # deposit into savings
+
             A += [row]
 
-            base -= S.income[year]  # must spend all income this year (temp)
+            base -= S.income[year]  # income offsets required spending this year
             base += S.expenses[year]
             base += S.taxed[year] * rate  # extra income is taxed
 
             # offset from having this taxrate from zero
             b += [(cut + S.stded * i_mul) * rate - base]
 
-    # final balance for savings needs to be positive
-    row = [0] * nvars
-    inc = 0
+    # savings balance needs to stay positive every year (not just at the
+    # end), otherwise depositing surplus income (see the bounds below)
+    # could let the solver spend against a balance that doesn't exist yet
     for year in range(S.numyr):
-        row[n0 + vper * year + 0] = S.r_rate ** (S.numyr - year)
-        # if S.income[year] > 0:
-        #    inc += S.income[year] * S.r_rate ** (S.numyr - year)
-    for year in range(S.workyr):
-        row[n1 + vper * year + 0] = -(S.r_rate ** (S.numyr + S.workyr - year))
-    A += [row]
-    b += [S.aftertax["bal"] * S.r_rate ** (S.workyr + S.numyr) + inc]
-
-    # any years with income need to be positive in aftertax
-    # for year in range(S.numyr):
-    #     if S.income[year] == 0:
-    #         continue
-    #     row = [0] * nvars
-    #     inc = 0
-    #     for y in range(year):
-    #         row[n0+vpy*y+0] = S.r_rate ** (year - y)
-    #         inc += S.income[y] * S.r_rate ** (year - y)
-    #     A += [row]
-    #     b += [S.aftertax['bal'] * S.r_rate ** year + inc]
+        row = [0] * nvars
+        for y in range(year + 1):
+            row[n0 + vper * y + 0] = S.r_rate ** (year + 1 - y)
+            row[n0 + vper * y + 4] = -(S.r_rate ** (year + 1 - y))
+        for y in range(S.workyr):
+            row[n1 + vper * y + 0] = -(S.r_rate ** (S.workyr + year + 1 - y))
+        A += [row]
+        b += [S.aftertax["bal"] * S.r_rate ** (S.workyr + year + 1)]
 
     # final balance for IRA needs to be positive
     row = [0] * nvars
@@ -410,11 +404,23 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
         A += [row]
         b += [-(S.IRA["bal"] * S.r_rate ** (S.workyr + year))]
 
+    # All variables are non-negative by default. The "deposit" slot (index
+    # +4) of each retirement year's block lets that year's surplus income
+    # (e.g. proceeds from selling a house) be banked into savings instead
+    # of being forced to spend it all, so it can be withdrawn (and taxed
+    # normally as a capital gain) in a later year. It is capped at that
+    # year's income so it can't be used as an unbacked source of money,
+    # and it is a separate variable (rather than a negative withdrawal) so
+    # depositing money never generates a negative capital-gains tax.
+    bounds = [(0, None)] * nvars
+    for year in range(S.numyr):
+        bounds[n0 + vper * year + 4] = (0, max(0, S.income[year]))
+
     if verbose:
         print("Num vars: ", len(c))
         print("Num contraints: ", len(b))
     res = scipy.optimize.linprog(
-        c, A_ub=A, b_ub=b, method="highs-ipm", options={"disp": verbose}
+        c, A_ub=A, b_ub=b, bounds=bounds, method="highs-ipm", options={"disp": verbose}
     )
     if not res.success:
         print(res)
@@ -481,6 +487,7 @@ def print_ascii(S: Data, res: list[float]) -> None:
         fira = res[S.n0 + year * S.vper + 1]
         froth = res[S.n0 + year * S.vper + 2]
         ira2roth = res[S.n0 + year * S.vper + 3]
+        deposit = res[S.n0 + year * S.vper + 4]
         if year < S.sepp_end:
             sepp_spend = sepp / S.sepp_ratio
         else:
@@ -522,7 +529,7 @@ def print_ascii(S: Data, res: list[float]) -> None:
         if S.retireage + year < 59:
             tax += fira * 0.10
         ttax += tax
-        extra = S.expenses[year] - S.income[year]
+        extra = S.expenses[year] - S.income[year] + deposit
         spending = fsavings + fira + froth - tax - extra + sepp_spend
 
         tspend += spending + extra
@@ -546,6 +553,7 @@ def print_ascii(S: Data, res: list[float]) -> None:
         )
 
         savings -= fsavings
+        savings += deposit
         savings *= S.r_rate
         ira -= fira + sepp_spend + ira2roth
         ira *= S.r_rate
@@ -563,14 +571,15 @@ def print_csv(S: Data, res: list[float]) -> None:
     print("ira,%d" % S.IRA["bal"])
     print("roth,%d" % S.roth["bal"])
 
-    print("age,spend,fIRA,fROTH,IRA2R,income,expense")
+    print("age,spend,fIRA,fROTH,IRA2R,income,expense,deposit")
     for year in range(S.numyr):
         fsavings = res[S.n0 + year * S.vper]
         fira = res[S.n0 + year * S.vper + 1]
         froth = res[S.n0 + year * S.vper + 2]
         ira2roth = res[S.n0 + year * S.vper + 3]
+        deposit = res[S.n0 + year * S.vper + 4]
         print(
-            ("%d," * 6 + "%d")
+            ("%d," * 7 + "%d")
             % (
                 year + S.retireage,
                 fsavings,
@@ -579,6 +588,7 @@ def print_csv(S: Data, res: list[float]) -> None:
                 ira2roth,
                 S.income[year],
                 S.expenses[year],
+                deposit,
             )
         )
 
