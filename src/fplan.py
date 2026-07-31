@@ -174,7 +174,15 @@ class Field(enum.IntEnum):
     IRA = 1  # IRA withdrawal (or, in a work year, IRA contribution)
     ROTH = 2  # Roth withdrawal (or, in a work year, Roth contribution)
     IRA2ROTH = 3  # IRA -> Roth conversion
-    DEPOSIT = 4  # bank part of this (retirement) year's income for later
+    # Money set aside this (retirement) year instead of being spent: it can
+    # come from income, or from an IRA/Roth/savings withdrawal that's larger
+    # than what's needed for spending that year, and is banked into aftertax
+    # savings for withdrawal (and taxation as a capital gain) in a later
+    # year. It's a separate variable (rather than a negative withdrawal) so
+    # that: (1) the full IRA withdrawal is always taxed at the ordinary
+    # rate, whether it's spent or deposited, and (2) depositing money never
+    # produces a negative capital-gains tax on the savings side.
+    DEPOSIT = 4
 
 
 class Vars:
@@ -208,6 +216,24 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
 
     c = V.row()
     c[GOAL] = -1
+    # Tiny tie-breaking costs so that, among solutions that are otherwise
+    # equally good for the spend goal, the solver doesn't arbitrarily pick
+    # a needlessly large withdrawal that's neither spent nor banked (this
+    # is a real degenerate LP: an unnecessary withdrawal has no effect on
+    # any constraint's slack once the year's spending/tax and future
+    # balance floors are already satisfied). Withdrawing costs a hair;
+    # banking (depositing) the withdrawn cash for later costs a hair more
+    # than that, so plain withdrawal-and-spend is preferred over
+    # withdraw-and-redeposit unless redepositing is genuinely useful (e.g.
+    # to fill up this year's tax bracket before it's needed) - in which
+    # case the much larger GOAL term makes it worthwhile anyway.
+    withdraw_eps = 0.0001
+    deposit_eps = 0.0002
+    for year in range(S.numyr):
+        c[V.retire(year, Field.SAVINGS)] = withdraw_eps
+        c[V.retire(year, Field.IRA)] = withdraw_eps
+        c[V.retire(year, Field.ROTH)] = withdraw_eps
+        c[V.retire(year, Field.DEPOSIT)] = deposit_eps
 
     A = []
     b = []
@@ -290,8 +316,9 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
             # + 0.0001 hack so that conversions
             # look slightly inferior to withdrawals
 
-            # depositing (banking) part of this year's income for later use
-            # consumes spendable cash the same way spending it would
+            # depositing (banking) unspent cash for later use consumes
+            # spendable cash the same way spending it would (the tiny
+            # tie-breaking cost lives in the objective `c`, see above)
             row[V.retire(year, Field.DEPOSIT)] = 1
 
             A += [row]
@@ -406,18 +433,10 @@ def solve(S: Data, sepp: bool, verbose: bool = False) -> list[float]:
         A += [row]
         b += [-(S.IRA["bal"] * S.r_rate ** (S.workyr + year))]
 
-    # All variables are non-negative by default. The "deposit" slot
-    # (Field.DEPOSIT) of each retirement year's block lets that year's
-    # surplus income (e.g. proceeds from selling a house) be banked into
-    # savings instead of being forced to spend it all, so it can be
-    # withdrawn (and taxed normally as a capital gain) in a later year. It
-    # is capped at that year's income so it can't be used as an unbacked
-    # source of money, and it is a separate variable (rather than a
-    # negative withdrawal) so depositing money never generates a negative
-    # capital-gains tax.
+    # All variables are non-negative by default (including Field.DEPOSIT,
+    # which is capped only implicitly by the balance/tax constraints above,
+    # not by an explicit bound here - see the Field.DEPOSIT comment).
     bounds = [(0, None)] * nvars
-    for year in range(S.numyr):
-        bounds[V.retire(year, Field.DEPOSIT)] = (0, max(0, S.income[year]))
 
     if verbose:
         print("Num vars: ", len(c))

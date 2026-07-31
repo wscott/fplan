@@ -62,20 +62,32 @@ The whole program is one file with three phases:
      basis erosion, RMDs (`RMD` table), the 59½ penalty, and optional SEPP
      72(t) withdrawals.
    - `c` is the objective (maximize the "goal" spend variable, i.e.
-     `c[GOAL] = -1` since linprog minimizes).
-   - Variables default to `(0, None)` bounds. The "deposit" slot
-     (`Field.DEPOSIT`) of each retirement year's block lets that year's
-     surplus income (e.g. a one-time house sale) be banked into savings
-     instead of being
-     forced to spend it all, so it can be withdrawn (and taxed normally
-     as a capital gain, via the withdrawal slot) in a later year. It is
-     capped at `(0, income[year])` so it can't be used as an unbacked
-     source of money, and it is a separate variable from the withdrawal
-     slot (rather than letting the withdrawal go negative) precisely so
-     depositing money never produces a negative capital-gains tax. A
-     per-year constraint keeps the running savings balance non-negative
-     in every year (not just at the end) so a deposit can't be spent
-     before it's actually received.
+     `c[GOAL] = -1` since linprog minimizes). It also carries tiny
+     tie-breaking costs on the withdrawal fields (`SAVINGS`/`IRA`/`ROTH`)
+     and a slightly larger one on `DEPOSIT`, purely so the solver doesn't
+     land on an arbitrary degenerate solution that withdraws (or
+     withdraws-then-deposits) more than needed when doing so has no real
+     effect on the achievable goal - see the comment above their
+     assignment in `solve()`.
+   - Variables default to `(0, None)` bounds. The `Field.DEPOSIT` slot of
+     each retirement year's block lets any of that year's spendable cash
+     (surplus income, e.g. a one-time house sale, or an IRA/Roth/savings
+     withdrawal deliberately taken beyond what's needed to spend that
+     year, e.g. to use up a low tax bracket) be banked into aftertax
+     savings instead of being forced to spend it all, so it can be
+     withdrawn (and taxed normally as a capital gain, via the savings
+     withdrawal slot) in a later year. It is a separate variable from the
+     withdrawal slots (rather than letting a withdrawal go negative)
+     precisely so depositing money never produces a negative
+     capital-gains tax, and so the full IRA withdrawal is always taxed at
+     the ordinary rate that year regardless of how much of it is spent
+     vs. deposited. A per-year constraint keeps the running aftertax
+     savings balance non-negative in every year (not just at the end) so
+     a deposit can't be spent before it's actually received; the IRA and
+     Roth balances only ever decrease (aside from investment growth and
+     Roth contributions/conversions), so their existing final-balance
+     constraints already imply they can't go negative in an intermediate
+     year either.
 3. **`print_ascii` / `print_csv`** — format the solved variable vector back
    into the yearly table described in `README.md` (save/send/IRA/fIRA/
    Roth/fRoth/IRA2R/rate/tax/spend/extra columns).
