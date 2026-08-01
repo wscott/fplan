@@ -554,7 +554,11 @@ def print_ascii(S: Data, res: list[float]) -> None:
         extra = S.expenses[year] - S.income[year] + deposit
         spending = fsavings + fira + froth - tax - extra + sepp_spend
 
-        tspend += spending + extra
+        # total real consumption is the discretionary spend plus any
+        # mandatory expenses - NOT `spending + extra`, which would cancel
+        # the income/deposit adjustment above and double-count money that
+        # gets deposited this year and withdrawn (and counted again) later
+        tspend += spending + S.expenses[year]
         print(
             (" %d:" + " %5.0f" * 12)
             % (
